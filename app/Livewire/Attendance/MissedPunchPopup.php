@@ -14,8 +14,8 @@ use Livewire\Component;
 /**
  * The missed-punch popup, on every page for the signed-in employee: each
  * missed punch of the last 7 days that is not regularised and not yet seen,
- * and the calendar month (its Mon–Fri days) reaching the early warning or
- * going over the allowance (MissedPunchTracker), each once.
+ * and the calendar month reaching the early warning or going over the
+ * allowance (MissedPunchTracker), each once.
  * Read from live attendance data (refreshed every 2 minutes); "Got it"
  * remembers what was seen and marks the matching notifications read.
  */

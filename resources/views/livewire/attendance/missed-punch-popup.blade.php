@@ -38,7 +38,7 @@
                     <p @class(['text-sm font-semibold', 'mt-3' => $state['missed'] !== [],
                         'text-red-700 dark:text-red-300' => $atWarning,
                         'text-zinc-600 dark:text-slate-300' => ! $atWarning]) data-missed-punch-month="{{ $state['month_count'] }}">
-                        {{ $state['month_count'] }} of {{ $state['allowance'] }} missed punches allowed this month ({{ $state['month_label'] }}, counted Mon–Fri).
+                        {{ $state['month_count'] }} of {{ $state['allowance'] }} missed punches allowed this month ({{ $state['month_label'] }}).
                         @if($over)
                             You are over the allowance and flagged for HR review — please contact HR about your attendance.
                         @elseif($atWarning)

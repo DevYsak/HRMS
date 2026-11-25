@@ -181,7 +181,7 @@ class AttendanceTracker extends Component
      */
     public array $missedPunches = [];
 
-    /** Punches missed this calendar month, Monday–Friday days (MissedPunchTracker::allowance() / warningAt()). */
+    /** Punches missed this calendar month, every day of it (MissedPunchTracker::allowance() / warningAt()). */
     public int $missedMonthCount = 0;
 
     /** Auto-generated plain-language attendance insights for the period. */
@@ -1118,7 +1118,7 @@ class AttendanceTracker extends Component
             }
         }
 
-        // ── The monthly allowance (Mon–Fri days): over it, or at the early warning ──
+        // ── The monthly allowance (every day of the month): over it, or at the early warning ──
         $allowance = MissedPunchTracker::allowance();
         $monthStatus = MissedPunchTracker::status($this->missedMonthCount);
         if ($monthStatus === MissedPunchTracker::STATUS_EXCEEDED) {
@@ -1133,7 +1133,7 @@ class AttendanceTracker extends Component
             $alerts[] = [
                 'type' => 'missed_punch_month',
                 'label' => "Warning — {$this->missedMonthCount} of {$allowance} missed punches used this month",
-                'detail' => "Missed punches lower your attendance score, and more than {$allowance} in a month (Mon–Fri days) is reviewed by HR. Punch Face IN and ID Card OUT every time you leave and come back, and regularise the ones above.",
+                'detail' => "Missed punches lower your attendance score, and more than {$allowance} in a month is reviewed by HR. Punch Face IN and ID Card OUT every time you leave and come back, and regularise the ones above.",
                 'date' => $today->toDateString(),
                 'action' => false,
             ];

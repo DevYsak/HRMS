@@ -23,9 +23,9 @@ use Illuminate\Support\Once;
 use Livewire\Livewire;
 
 /*
- * The monthly missed-punch allowance: a calendar month (its Monday–Friday
- * days) allows a number of missed punches set on Attendance Settings
- * (default 5); one more flags the employee for HR review, HR is asked to
+ * The monthly missed-punch allowance: a calendar month — every day of it,
+ * weekends included — allows a number of missed punches set on Attendance
+ * Settings (default 5); one more flags the employee for HR review, HR is asked to
  * review, and the employee is told to contact HR. HR sees employee-wise
  * counts, reviews flags, and keeps the flag history.
  */
@@ -118,20 +118,26 @@ test('one over the allowance flags the employee once, tells HR to review and the
     expect(MissedPunchFlag::sole()->missed_count)->toBe(4);
 });
 
-test('the whole calendar month counts, Monday–Friday only, and the allowance starts again on the 1st', function () {
+test('every day of the calendar month counts, weekends included, and the allowance starts again on the 1st', function () {
     // Mon 2 Nov: an earlier week of the same month counts too.
     mpaDay($this->employee, '2026-11-02', 1);
-    // Sat 28 Nov: a missed punch on a weekend day does not.
+    // Sat 28 Nov: a missed punch on a weekend day counts as well.
     $this->travelTo(Carbon::parse('2026-11-28 21:00:00'));
     mpaDay($this->employee, '2026-11-28', 2);
     $tracker = app(MissedPunchTracker::class);
 
     expect(collect($tracker->between($this->employee, Carbon::parse('2026-11-28'), Carbon::parse('2026-11-28')))->flatten(1))->toHaveCount(2)
-        ->and($tracker->monthCount($this->employee))->toBe(4);   // 2 Nov 1 + Mon 23 2 + Tue 24 1; Saturday's 2 do not count
+        ->and($tracker->monthCount($this->employee))->toBe(6)   // 2 Nov 1 + Mon 23 2 + Tue 24 1 + Sat 28 2
+        ->and(MissedPunchTracker::status(6))->toBe(MissedPunchTracker::STATUS_EXCEEDED);
+
+    // 31 Oct (a Saturday) belongs to October, not November.
+    mpaDay($this->employee, '2026-10-31', 1);
+    expect($tracker->monthCount($this->employee))->toBe(6)
+        ->and($tracker->monthCount($this->employee, Carbon::parse('2026-10-15')))->toBe(1);
 
     $this->travelTo(Carbon::parse('2026-12-01 09:00:00'));   // the 1st of the next month
     expect($tracker->monthCount($this->employee))->toBe(0)
-        ->and($tracker->monthCount($this->employee, Carbon::parse('2026-11-15')))->toBe(4);
+        ->and($tracker->monthCount($this->employee, Carbon::parse('2026-11-15')))->toBe(6);
 });
 
 test('HR sees employee-wise monthly counts, reviews a flag, and keeps the flag history', function () {

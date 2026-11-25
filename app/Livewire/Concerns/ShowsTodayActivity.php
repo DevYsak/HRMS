@@ -366,7 +366,7 @@ trait ShowsTodayActivity
             'state' => $state,
             'clock_start_ms' => $clockStart,
             'since' => $clockStart ? $fmt((int) $clockStart, 'h:i A') : null,
-            // Punches missed this calendar month (Mon–Fri days) against the monthly allowance.
+            // Punches missed this calendar month against the monthly allowance.
             'missed_month' => $this->missedMonthCount,
             'missed_allowance' => MissedPunchTracker::allowance(),
             'missed_status' => MissedPunchTracker::status($this->missedMonthCount),

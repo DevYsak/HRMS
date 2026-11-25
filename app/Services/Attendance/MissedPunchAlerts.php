@@ -18,8 +18,7 @@ use Illuminate\Support\Collection;
 /**
  * Acts on missed punches (MissedPunchTracker), each once:
  *   - every mid-day missed punch → the employee and HR;
- *   - the calendar month (its Mon–Fri days) reaching the early warning →
- *     the employee and HR;
+ *   - the calendar month reaching the early warning → the employee and HR;
  *   - the month going over the allowance → the employee is flagged for HR
  *     review (MissedPunchFlag, audited), HR is told to review, and the
  *     employee is told the allowance is used up and to contact HR.

@@ -73,11 +73,11 @@
                         label="Missing-checkout buffer"
                         description="A day is Missing Checkout at shift end + 1 hour. The system never creates a check-out; the employee regularises." />
                 </div>
-                {{-- Monthly missed-punch rules (the calendar month's Monday–Friday days, starting again on the 1st) --}}
+                {{-- Monthly missed-punch rules (every day of the calendar month, starting again on the 1st) --}}
                 <div class="grid grid-cols-2 gap-4" data-missed-punch-settings>
                     <flux:input wire:model="policy.missed_punch_monthly_allowance" type="number" min="1" max="50"
                         label="Missed punches allowed per month"
-                        description="Counted Monday–Friday, starting again on the 1st. One more flags the employee for HR review; HR and the employee are told." />
+                        description="Every day of the month counts, weekends too, starting again on the 1st. One more flags the employee for HR review; HR and the employee are told." />
                     <flux:input wire:model="policy.missed_punch_warning_at" type="number" min="0" max="50"
                         label="Early warning at"
                         description="Missed punches in a month that bring a warning to the employee. 0 = no early warning." />

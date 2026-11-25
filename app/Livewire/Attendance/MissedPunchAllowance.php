@@ -15,10 +15,9 @@ use Livewire\Component;
 
 /**
  * Attendance → Missed Punches (HR): every employee's missed punches in one
- * calendar month (its Mon–Fri days) against the monthly allowance, who is
- * over it and flagged, the regularisation requests they made, and HR's review
- * of each flag — plus the flag history. Only the people the viewer's
- * attendance reach covers.
+ * calendar month against the monthly allowance, who is over it and flagged,
+ * the regularisation requests they made, and HR's review of each flag — plus
+ * the flag history. Only the people the viewer's attendance reach covers.
  */
 class MissedPunchAllowance extends Component
 {

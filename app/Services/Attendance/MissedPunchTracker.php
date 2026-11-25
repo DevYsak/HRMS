@@ -29,10 +29,10 @@ use Illuminate\Support\Collection;
  * was missed — marked resolved. A web clock-in day has only its check-out
  * to miss.
  *
- * The allowance counts the calendar month — its Monday-to-Friday days — and
- * starts again on the 1st. HR sets it on Attendance Settings (default 5):
- * going over it flags the employee for HR review. An early warning goes out
- * at its own number (default 3; 0 = none).
+ * The allowance counts every day of the calendar month, weekends included,
+ * and starts again on the 1st. HR sets it on Attendance Settings (default
+ * 5): going over it flags the employee for HR review. An early warning goes
+ * out at its own number (default 3; 0 = none).
  */
 class MissedPunchTracker
 {
@@ -273,7 +273,7 @@ class MissedPunchTracker
             ['counted', 'corrected', 'missed', 'missed_corrected', 'duplicate', 'ignored', 'superseded'], 0), $counts)];
     }
 
-    /** Missed punches on the Monday–Friday days of the calendar month holding $day (to today). */
+    /** Missed punches in the calendar month holding $day, every day of it (to today). */
     public function monthCount(Employee $employee, ?CarbonInterface $day = null): int
     {
         $start = self::monthStart($day ?? now());
@@ -318,8 +318,8 @@ class MissedPunchTracker
     }
 
     /**
-     * Missed punches on the working days (Monday–Friday) of the calendar month
-     * starting $monthStart, from a by-date list (between()).
+     * Missed punches on every day of the calendar month starting $monthStart,
+     * weekends included, from a by-date list (between()).
      *
      * @param  array<string, list<array<string, mixed>>>  $byDate
      */
@@ -329,7 +329,7 @@ class MissedPunchTracker
         $to = Carbon::parse($from)->endOfMonth()->toDateString();
 
         return collect($byDate)
-            ->filter(fn (array $list, string $date) => $date >= $from && $date <= $to && Carbon::parse($date)->isWeekday())
+            ->filter(fn (array $list, string $date) => $date >= $from && $date <= $to)
             ->sum(fn (array $list) => count($list));
     }
 

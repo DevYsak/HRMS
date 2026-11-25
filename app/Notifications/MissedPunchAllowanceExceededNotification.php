@@ -11,8 +11,8 @@ use Illuminate\Notifications\Notification;
 use Illuminate\Support\Carbon;
 
 /**
- * The calendar month (its Mon–Fri days) went over the missed-punch
- * allowance: the employee is flagged. HR is asked to review their
+ * The calendar month went over the missed-punch allowance: the employee is
+ * flagged. HR is asked to review their
  * attendance; the employee is told the allowance is used up and to contact
  * HR. Sent once per month.
  */

@@ -13,7 +13,7 @@
         <div>
             <h1 class="text-xl font-bold text-zinc-900 dark:text-white">Missed Punches</h1>
             <p class="mt-0.5 text-sm text-zinc-500 dark:text-slate-400">
-                {{ $allowance }} missed punches allowed per calendar month (counted Monday–Friday), starting again on the 1st.
+                {{ $allowance }} missed punches allowed per calendar month — every day counts, weekends too — starting again on the 1st.
                 @if($warningAt > 0) Early warning at {{ $warningAt }}. @endif
                 One more than {{ $allowance }} flags the employee for your review.
                 <a href="{{ route('attendance.settings') }}" wire:navigate class="font-semibold text-orange-600 hover:underline">Change in Attendance Settings</a>

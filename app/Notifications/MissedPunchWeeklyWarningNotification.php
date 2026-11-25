@@ -11,8 +11,8 @@ use Illuminate\Notifications\Notification;
 use Illuminate\Support\Carbon;
 
 /**
- * Early warning: the calendar month (its Mon–Fri days) reached the warning
- * number of missed punches set on Attendance Settings, still within the
+ * Early warning: the calendar month reached the warning number of missed
+ * punches set on Attendance Settings, still within the
  * allowance. Sent once per month to the employee and the HR covering them.
  * The class keeps its first name ("Weekly") because it is the key of its row
  * on Notifications & Email; the event is shown as "Missed Punch Warning".
