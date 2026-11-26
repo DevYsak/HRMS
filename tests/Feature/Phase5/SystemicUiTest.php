@@ -51,7 +51,7 @@ test('plain page titles share one style and are real h1 headings', function () {
 
 test('All Attendance tiles keep their full label', function () {
     Livewire::actingAs(suUser('hr_admin'))->test(AllAttendance::class)
-        ->assertSeeHtml('line-clamp-2 break-words text-[9px] font-bold uppercase leading-snug tracking-wide text-zinc-400">Total Employees');
+        ->assertSeeHtml('line-clamp-2 break-words text-[11px] font-bold uppercase leading-snug tracking-wide text-zinc-400">Total Employees');
 });
 
 test('pages the role journeys found overflowing on phones wrap or stack', function () {

@@ -113,10 +113,11 @@ test('each row shows worked against the shift and the day as a timeline', functi
 
     // No check-out: an open stretch to the shift end, and the missed check-out marked where it was missed.
     expect($kajal)->toMatchArray(['missing_checkout' => true, 'missed_count' => 1])
-        ->and($kajal['segments'])->toBe([['from' => 570, 'to' => 1170, 'kind' => 'open']])
+        // (at most one shift's hours long: 09:30 + 9h)
+        ->and($kajal['segments'])->toBe([['from' => 570, 'to' => 1110, 'kind' => 'open']])
         ->and($kajal['marks'])->toBe([['at' => 570, 'title' => 'Missed check-out', 'resolved' => false]]);
 
-    dhPage()->assertSeeHtml('data-segment="open"')->assertSeeHtml('data-mark')->assertSee('Not counted until the day is regularised');
+    dhPage()->assertSeeHtml('data-segment="open"')->assertSeeHtml('data-mark')->assertSee('Not counted')->assertSee('No check-out punch');
 });
 
 test('History opens one person\'s date and steps day by day, never past today', function () {
@@ -124,7 +125,7 @@ test('History opens one person\'s date and steps day by day, never past today', 
         ->assertSeeHtml('data-day-history="'.$this->pratish->id.'|2026-11-02"')
         ->assertSee('Monday, 02 Nov 2026')
         ->assertSeeHtml('data-history-punch="counted"')
-        ->assertSee('Out for 18m');
+        ->assertSee('Out 18m');
 
     $history = $page->viewData('dayHistory');
     expect($history['sessions'])->toHaveCount(3)

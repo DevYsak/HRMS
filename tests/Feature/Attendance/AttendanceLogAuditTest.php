@@ -62,17 +62,18 @@ function alPage()
     return Livewire::actingAs(test()->hr)->test(AllAttendance::class)->set('dateFrom', '2026-11-02')->set('dateTo', '2026-11-04');
 }
 
-test('the Punches column shows the latest four as a green / orange timeline, with every punch on hover', function () {
+test('a row counts the day\'s punches and lists every one on hover, with breaks and how late', function () {
     $html = alPage()->assertOk()->assertSeeHtml('data-punch-timeline')->html();
+    $rowId = Attendance::where('employee_id', $this->pratish->id)->value('id');
 
-    $row = substr($html, strpos($html, 'data-open-punch-log="'.$this->pratish->id.'"'));
+    $row = substr($html, strpos($html, 'data-log-row="'.$rowId.'"'));
     $row = substr($row, 0, strpos($row, '</tr>'));
-    expect(substr_count($row, 'data-punch="in"') + substr_count($row, 'data-punch="out"'))->toBe(4)
-        ->and($row)->toContain('+2')                                   // two earlier punches collapsed
-        ->and($row)->toContain('IN 10:57 AM')->and($row)->toContain('OUT 05:00 PM')   // every punch in the hover timeline
+    expect($row)->toContain('6 punches')
+        ->and(substr_count($row, 'data-punch="in"') + substr_count($row, 'data-punch="out"'))->toBe(6)   // every punch in the hover list
+        ->and($row)->toContain('IN 10:57 AM')->and($row)->toContain('OUT 05:00 PM')
         ->and($row)->toContain('data-punch-timeline-full')
         ->and($row)->toContain('2 breaks')
-        ->and($row)->toContain('+22m late');
+        ->and($row)->toContain('· 22m');                                // Late · 22m, said once in Status
 });
 
 test('audit chips count missed punches and multiple breaks, and each filters the log to them', function () {

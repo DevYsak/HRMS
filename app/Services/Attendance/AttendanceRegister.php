@@ -76,6 +76,12 @@ class AttendanceRegister
     /** The shortest span a timeline bar shows, in minutes. */
     public const MIN_WINDOW_MINUTES = 600;
 
+    /** How far before the first punch a timeline stretches to show the shift's start (a late arrival). */
+    public const SHIFT_REACH_MINUTES = 240;
+
+    /** How far after the last punch a timeline stretches to show the shift's end. */
+    public const SHIFT_END_REACH_MINUTES = 120;
+
     public function __construct(
         private readonly LiveAttendanceService $live,
         private readonly AttendanceStatusResolver $status,
@@ -236,29 +242,48 @@ class AttendanceRegister
 
     /**
      * The hours a set of day lines spans, for their timeline bars (minutes
-     * from midnight): the earliest shift start, punch or missed punch to the
-     * latest, widened to whole hours and to at least MIN_WINDOW_MINUTES.
+     * from midnight): from the earliest punch or missed punch to the latest,
+     * stretched to show the shift start (up to SHIFT_REACH_MINUTES before
+     * the first punch, so a late arrival is visible) and the shift end (up
+     * to SHIFT_END_REACH_MINUTES after the last), then widened to whole hours and
+     * to at least MIN_WINDOW_MINUTES. Capping the shift's reach keeps a
+     * mistyped shift (an "8 PM" end saved as 08:00, read as overnight) from
+     * stretching every bar across a day and a half. Days without punches
+     * show their shift.
      *
      * @param  iterable<array<string, mixed>>  $lines
      * @return array{from: int, to: int}
      */
     public static function window(iterable $lines): array
     {
-        $points = [];
+        $activity = [];
+        $shifts = [];
         foreach ($lines as $line) {
             foreach ($line['segments'] ?? [] as $segment) {
-                array_push($points, $segment['from'], $segment['to']);
+                array_push($activity, $segment['from'], $segment['to']);
             }
             foreach ($line['marks'] ?? [] as $mark) {
-                $points[] = $mark['at'];
+                $activity[] = $mark['at'];
             }
             if (($line['shift_from'] ?? null) !== null) {
-                array_push($points, $line['shift_from'], $line['shift_to']);
+                $shifts[] = [$line['shift_from'], $line['shift_to']];
             }
         }
 
-        $from = $points === [] ? 9 * 60 : intdiv(max(0, min($points)), 60) * 60;
-        $to = $points === [] ? 18 * 60 : (int) ceil(max($points) / 60) * 60;
+        if ($activity !== []) {
+            $first = min($activity);
+            $last = max($activity);
+            foreach ($shifts as [$shiftFrom, $shiftTo]) {
+                $first = min($first, max($shiftFrom, min($activity) - self::SHIFT_REACH_MINUTES));
+                $last = max($last, min($shiftTo, max($activity) + self::SHIFT_END_REACH_MINUTES));
+            }
+        } elseif ($shifts !== []) {
+            $first = min(array_column($shifts, 0));
+            $last = min(max(array_column($shifts, 1)), $first + 16 * 60);
+        }
+
+        $from = isset($first) ? intdiv(max(0, $first), 60) * 60 : 9 * 60;
+        $to = isset($last) ? (int) ceil($last / 60) * 60 : 18 * 60;
         while ($to - $from < self::MIN_WINDOW_MINUTES) {
             if ($from > 0) {
                 $from -= 60;
@@ -515,6 +540,8 @@ class AttendanceRegister
             'auto_checkout' => $auto,
             'regularised' => $day->regularised || $regularised,
             'shift' => $day->shift ? $day->shift->name.' · '.$day->shift->start->format('g:i A').' – '.$day->shift->end->format('g:i A') : 'No shift',
+            'shift_name' => $day->shift?->name,
+            'shift_window' => $day->shift ? app(DateDisplay::class)->time($day->shift->start).' – '.app(DateDisplay::class)->time($day->shift->end) : null,
             'shift_start' => $day->shift ? app(DateDisplay::class)->time($day->shift->start) : null,
             'grace' => $day->shift?->graceMinutes ?? 0,
             'mode' => $row?->work_mode,
@@ -551,8 +578,10 @@ class AttendanceRegister
     /**
      * The worked stretches of a day for its timeline bar: each counted IN to
      * the next counted OUT (an automatic punch-out marks its stretch "auto").
-     * A day still open runs to now while live, or to the shift end as "open"
-     * once the check-out is missing. A day clocked in on the web, with no
+     * A day still open runs to now while live, or as "open" once the
+     * check-out is missing — to the shift end, but never longer than one
+     * shift's hours (a mistyped overnight shift would otherwise run it
+     * through the night). A day clocked in on the web, with no
      * device punches, is its first in to its last out.
      *
      * @param  list<array<string, mixed>>  $trail
@@ -587,7 +616,7 @@ class AttendanceRegister
         if ($open !== null) {
             $segments[] = $live
                 ? ['from' => $open, 'to' => max($open, $minute((int) Carbon::now()->getTimestampMs())), 'kind' => 'live']
-                : ['from' => $open, 'to' => max($open + 30, $shiftTo ?? 0), 'kind' => 'open'];
+                : ['from' => $open, 'to' => max($open + 30, min($shiftTo ?? 0, $open + $day->expectedMinutes)), 'kind' => 'open'];
         }
 
         return $segments;

@@ -111,18 +111,18 @@
                             <td class="pulse-td">{{ $row->employee?->department?->name ?? '—' }}</td>
                             <td class="pulse-td">{{ $row->employee?->shift?->name ?? '—' }}</td>
                             <td class="pulse-td">{{ $row->employee?->manager?->name ?? '—' }}</td>
-                            <td class="pulse-td font-mono">{{ $row->first_punch?->toImmutable()->userTime() ?? '—' }}</td>
-                            <td class="pulse-td font-mono">{{ $row->last_punch?->toImmutable()->userTime() ?? '—' }}</td>
-                            <td class="pulse-td font-mono">{{ $row->break_minutes }}m</td>
-                            <td class="pulse-td font-mono">{{ $row->working_hours }}</td>
-                            <td class="pulse-td font-mono">
+                            <td class="pulse-td tabular-nums">{{ $row->first_punch?->toImmutable()->userTime() ?? '—' }}</td>
+                            <td class="pulse-td tabular-nums">{{ $row->last_punch?->toImmutable()->userTime() ?? '—' }}</td>
+                            <td class="pulse-td tabular-nums">{{ $row->break_minutes }}m</td>
+                            <td class="pulse-td tabular-nums">{{ $row->working_hours }}</td>
+                            <td class="pulse-td tabular-nums">
                                 @if ($row->late_minutes > 0)
                                     <span class="text-amber-600 dark:text-amber-400">{{ $row->late_minutes }}m</span>
                                 @else
                                     —
                                 @endif
                             </td>
-                            <td class="pulse-td font-mono">
+                            <td class="pulse-td tabular-nums">
                                 @if ($row->overtime_minutes > 0)
                                     <span class="text-violet-600 dark:text-violet-400">{{ $row->overtime_minutes }}m</span>
                                 @else
@@ -143,7 +143,7 @@
                                     {{ ucfirst(str_replace('_', ' ', $row->status)) }}
                                 </span>
                             </td>
-                            <td class="pulse-td font-mono">{{ $row->raw_punch_count }}</td>
+                            <td class="pulse-td tabular-nums">{{ $row->raw_punch_count }}</td>
                         </tr>
                     @empty
                         <tr>

@@ -93,9 +93,9 @@
                                 <div class="text-xs text-zinc-400">{{ $emp['employee_code'] }}</div>
                             </td>
                             <td class="pulse-td">{{ $emp['department'] ?? '—' }}</td>
-                            <td class="pulse-td font-mono">{{ $summary['first_in'] ?? '—' }}</td>
-                            <td class="pulse-td font-mono">{{ $summary['last_out'] ?? '—' }}</td>
-                            <td class="pulse-td font-mono">{{ $summary['working_hours'] ?? '—' }}</td>
+                            <td class="pulse-td tabular-nums">{{ $summary['first_in'] ?? '—' }}</td>
+                            <td class="pulse-td tabular-nums">{{ $summary['last_out'] ?? '—' }}</td>
+                            <td class="pulse-td tabular-nums">{{ $summary['working_hours'] ?? '—' }}</td>
                             <td class="pulse-td">
                                 {{ count($emp['sessions']) }}
                                 @if ($summary['punch_count'] > 0)

@@ -3,7 +3,7 @@
     <div class="flex min-w-0 items-center gap-3 text-xs">
         <span class="font-black text-zinc-900 dark:text-white">{{ $req->employee?->user?->name ?? '—' }}</span>
         <span class="text-zinc-500 dark:text-zinc-400">{{ \Carbon\Carbon::parse($req->work_date)->toImmutable()->userDate() }}</span>
-        <span class="font-mono font-bold text-amber-700">{{ $req->requestedWindowLabel() }}</span>
+        <span class="tabular-nums font-bold text-amber-700">{{ $req->requestedWindowLabel() }}</span>
         <span class="hidden truncate italic text-zinc-400 md:inline">“{{ \Illuminate\Support\Str::limit($req->reason, 60) }}”</span>
     </div>
     @if(auth()->user()->canApproveRegularisations())
@@ -12,6 +12,6 @@
         @include('livewire.attendance.partials.regularisation-actions', ['reg' => $req])
     </div>
     @else
-    <span class="inline-flex shrink-0 items-center rounded-lg bg-zinc-100 px-2.5 py-1 text-[10px] font-bold uppercase text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">Awaiting HR</span>
+    <span class="inline-flex shrink-0 items-center rounded-lg bg-zinc-100 px-2.5 py-1 text-xs font-bold uppercase text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">Awaiting HR</span>
     @endif
 </div>

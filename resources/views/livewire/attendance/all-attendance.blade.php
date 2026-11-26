@@ -5,6 +5,8 @@
 @php
     $hm = fn (int $m): string => intdiv($m, 60).'h '.str_pad((string) ($m % 60), 2, '0', STR_PAD_LEFT).'m';
     $short = fn (int $m): string => $m >= 60 ? intdiv($m, 60).'h '.str_pad((string) ($m % 60), 2, '0', STR_PAD_LEFT).'m' : $m.'m';
+    // A shift's length the way people say it: "9h", "8h 30m".
+    $shiftLength = fn (int $m): string => $m % 60 === 0 ? intdiv($m, 60).'h' : $short($m);
     // Worked against the shift — the same tones as the Live board.
     $progressBar = ['on_track' => 'bg-emerald-500', 'nearing' => 'bg-lime-500', 'done' => 'bg-yellow-400', 'beyond' => 'bg-orange-500', 'way_beyond' => 'bg-rose-500'];
     $progressText = ['on_track' => 'text-emerald-600 dark:text-emerald-400', 'nearing' => 'text-lime-600 dark:text-lime-400', 'done' => 'text-yellow-600 dark:text-yellow-400', 'beyond' => 'text-orange-600 dark:text-orange-400', 'way_beyond' => 'text-rose-600 dark:text-rose-400'];
@@ -20,9 +22,10 @@
     $is24h = app(\App\Support\DateDisplay::class)->timeFormat() === 'H:i';
     $clockAt = fn (int $minute): string => \Carbon\CarbonImmutable::today()->addMinutes($minute)->format($is24h ? 'H:i' : 'h:i A');
     $hourAt = fn (int $minute): string => $is24h ? sprintf('%02d:00', intdiv($minute, 60) % 24) : \Carbon\CarbonImmutable::today()->addMinutes($minute)->format('g A');
-    $ticksFor = function (array $window): array {
+    // Hour marks on round hours, at most $most of them so the labels never touch.
+    $ticksFor = function (array $window, int $most = 6): array {
         $span = max(1, $window['to'] - $window['from']);
-        $step = $span <= 720 ? 120 : 180;
+        $step = collect([60, 120, 180, 240, 360, 480])->first(fn (int $s) => $span / $s <= $most) ?? 480;
         $ticks = [];
         for ($m = (int) ceil($window['from'] / $step) * $step; $m <= $window['to']; $m += $step) {
             $ticks[] = ['at' => $m, 'pct' => round(($m - $window['from']) * 100 / $span, 3)];
@@ -66,7 +69,7 @@
             <button wire:click="nextWeek" type="button" aria-label="Next week" class="flex size-7 items-center justify-center rounded-lg text-zinc-400 transition hover:bg-orange-50 hover:text-orange-500"><flux:icon.chevron-right class="size-4" /></button>
         </div>
         <div class="flex items-center gap-1.5 rounded-xl border {{ $date ? 'border-orange-400 ring-1 ring-orange-200 dark:ring-orange-500/30' : 'border-orange-100 dark:border-white/10' }} bg-white px-2 py-1 shadow-sm dark:bg-zinc-900" title="Pick a single date (overrides the week)">
-            <span class="text-[10px] font-bold uppercase tracking-wider {{ $date ? 'text-orange-500' : 'text-zinc-400' }}">Day</span>
+            <span class="text-xs font-bold uppercase tracking-wider {{ $date ? 'text-orange-500' : 'text-zinc-400' }}">Day</span>
             <input type="date" wire:model.live="date" max="{{ now()->toDateString() }}" class="w-[8rem] border-0 bg-transparent p-1 text-xs font-semibold text-zinc-600 focus:ring-0 dark:text-zinc-300">
             @if($date)
                 <button type="button" wire:click="$set('date', '')" class="rounded-md p-0.5 text-zinc-400 hover:bg-orange-50 hover:text-orange-600" aria-label="Back to the week"><flux:icon.x-mark class="size-3.5" /></button>
@@ -106,12 +109,12 @@
             <div class="flex items-start justify-between gap-2">
                 <span class="inline-flex size-9 shrink-0 items-center justify-center rounded-xl" style="background: {{ $k['color'] }}1a; color: {{ $k['color'] }};"><flux:icon :icon="$k['icon']" class="size-[18px]" /></span>
                 @if($k['pct'] !== null)
-                    <span class="rounded-full px-1.5 py-0.5 text-[10px] font-bold tabular-nums" style="background: {{ $k['color'] }}14; color: {{ $k['color'] }};">{{ rtrim(rtrim(number_format((float) $k['pct'], 1), '0'), '.') }}%</span>
+                    <span class="rounded-full px-1.5 py-0.5 text-xs font-bold tabular-nums" style="background: {{ $k['color'] }}14; color: {{ $k['color'] }};">{{ rtrim(rtrim(number_format((float) $k['pct'], 1), '0'), '.') }}%</span>
                 @endif
             </div>
             <div class="mt-3 text-2xl font-black leading-none tabular-nums text-zinc-900 dark:text-white">{{ $k['value'] }}</div>
-            <div class="mt-1 line-clamp-2 break-words text-[9px] font-bold uppercase leading-snug tracking-wide text-zinc-400">{{ $k['label'] }}</div>
-            <div class="line-clamp-2 text-[10px] leading-snug text-zinc-400">{{ $k['sub'] }}</div>
+            <div class="mt-1 line-clamp-2 break-words text-[11px] font-bold uppercase leading-snug tracking-wide text-zinc-400">{{ $k['label'] }}</div>
+            <div class="line-clamp-2 text-xs leading-snug text-zinc-400">{{ $k['sub'] }}</div>
             @if($k['pct'] !== null)
                 <div class="mt-2.5 h-1 overflow-hidden rounded-full bg-zinc-100 dark:bg-white/10"><div class="h-full rounded-full" style="width: {{ min(100, (float) $k['pct']) }}%; background: {{ $k['color'] }};"></div></div>
             @endif
@@ -180,9 +183,9 @@
                         <span class="font-black text-zinc-900 dark:text-white">{{ $done->employee?->user?->name ?? '—' }}</span>
                         <span class="text-zinc-500 dark:text-zinc-400">{{ \Carbon\Carbon::parse($done->work_date)->toImmutable()->userDate() }}</span>
                         @if($done->requested_check_in)
-                            <span class="font-mono font-bold text-zinc-600 dark:text-zinc-300">{{ $done->requestedWindowLabel() }}</span>
+                            <span class="tabular-nums font-bold text-zinc-600 dark:text-zinc-300">{{ $done->requestedWindowLabel() }}</span>
                         @endif
-                        <span class="rounded-full px-2 py-0.5 text-[9px] font-bold uppercase {{ $done->status === 'approved' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-600' }}">{{ $done->status }}</span>
+                        <span class="rounded-full px-2 py-0.5 text-[11px] font-bold uppercase {{ $done->status === 'approved' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-600' }}">{{ $done->status }}</span>
                     </div>
                     @include('livewire.attendance.partials.regularisation-actions', ['reg' => $done])
                 </div>
@@ -213,29 +216,32 @@
     <div class="ui-surface p-5">
         <div class="mb-1 flex items-center justify-between">
             <div class="text-sm font-black text-zinc-900 dark:text-white">Presence Overview</div>
-            <span class="rounded-full bg-orange-50 px-2 py-0.5 text-[10px] font-bold text-orange-500">{{ $weekLabel }}</span>
+            <span class="rounded-full bg-orange-50 px-2 py-0.5 text-xs font-bold text-orange-500">{{ $weekLabel }}</span>
         </div>
         <x-dashboard.chart :options="$trendChart" id="presence-trend" wire:key="trend-{{ $dateFrom }}-{{ $dateTo }}" class="-mb-2" />
     </div>
 @endif
 
 {{-- ═══════════════ ATTENDANCE LOG — date-wise ═══════════════
-     No overflow-hidden here: it clipped the filter dropdowns in the header. --}}
+     One fact in one place: the day's status (with how late) in Status, the
+     first in and last out in In · Out, the shape of the day on the bar,
+     every punch on hover and in History. No overflow-hidden here: it
+     clipped the filter dropdowns in the header. --}}
 <section class="ui-surface" data-attendance-log>
-    <div class="flex flex-wrap items-start justify-between gap-3 border-b border-orange-100/70 px-5 py-3.5 dark:border-white/10">
+    <div class="flex flex-wrap items-start justify-between gap-3 border-b border-orange-100/70 px-5 py-4 dark:border-white/10">
         <div>
-            <h3 class="flex items-center gap-2 text-sm font-black text-zinc-900 dark:text-white">
-                <span class="inline-flex size-7 items-center justify-center rounded-lg bg-orange-50 text-orange-500 dark:bg-orange-500/10"><flux:icon.clock class="size-4" /></span>
+            <h3 class="flex items-center gap-2 text-base font-bold text-zinc-900 dark:text-white">
+                <span class="inline-flex size-8 items-center justify-center rounded-lg bg-orange-50 text-orange-500 dark:bg-orange-500/10"><flux:icon.clock class="size-4" /></span>
                 Attendance Log
-                <span class="text-[10px] font-bold uppercase tracking-widest text-zinc-400">· {{ $attendances->total() }} records</span>
+                <span class="text-sm font-medium text-zinc-400">· {{ $attendances->total() }} {{ \Illuminate\Support\Str::plural('record', $attendances->total()) }}</span>
             </h3>
-            <p class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Date by date, in order of arrival. Select a row, or <span class="font-semibold text-zinc-700 dark:text-zinc-200">History</span>, for that person's whole day.</p>
+            <p class="mt-1 text-[13px] text-zinc-500 dark:text-zinc-400">Date by date, in order of arrival. Select a row for that person's whole day.</p>
         </div>
         <div class="flex flex-wrap items-center gap-2">
             <div class="relative">
-                <flux:icon.magnifying-glass class="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-zinc-400" />
+                <flux:icon.magnifying-glass class="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-zinc-400" />
                 <input type="text" wire:model.live.debounce.300ms="search" placeholder="Search employee…"
-                    class="w-48 rounded-lg border border-orange-100 bg-white py-1.5 pl-8 pr-2.5 text-xs font-semibold text-zinc-600 placeholder:text-zinc-400 focus:border-orange-400 focus:ring-0 dark:border-white/10 dark:bg-zinc-900 dark:text-zinc-300">
+                    class="w-48 rounded-lg border border-orange-100 bg-white py-1.5 pl-8 pr-2.5 text-[13px] text-zinc-700 placeholder:text-zinc-400 focus:border-orange-400 focus:ring-0 dark:border-white/10 dark:bg-zinc-900 dark:text-zinc-200">
             </div>
             @if($filterDepartments->isNotEmpty())
                 <x-clean-select model="filterDepartment" :live="true"
@@ -259,62 +265,54 @@
                 ]" />
             {{-- Date range — filter the punch logs for an arbitrary span --}}
             <div class="flex items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-2 py-1 dark:border-zinc-700 dark:bg-zinc-900" title="Filter logs by date range">
-                <flux:icon.calendar-days class="size-3.5 text-zinc-400" />
+                <flux:icon.calendar-days class="size-4 text-zinc-400" />
                 <input type="date" wire:model.live="dateFrom" max="{{ $dateTo && $dateTo < now()->toDateString() ? $dateTo : now()->toDateString() }}" aria-label="From date"
                     @disabled($date) title="{{ $date ? 'A single day is selected — clear it to use a range' : 'From date' }}"
-                    class="w-[7.5rem] border-0 bg-transparent p-0.5 text-xs font-semibold tabular-nums text-zinc-600 focus:ring-0 disabled:opacity-40 dark:text-zinc-300">
+                    class="w-[8rem] border-0 bg-transparent p-0.5 text-[13px] tabular-nums text-zinc-700 focus:ring-0 disabled:opacity-40 dark:text-zinc-200">
                 <span class="text-zinc-300">–</span>
                 <input type="date" wire:model.live="dateTo" min="{{ $dateFrom }}" max="{{ now()->toDateString() }}" aria-label="To date"
                     @disabled($date) title="{{ $date ? 'A single day is selected — clear it to use a range' : 'To date' }}"
-                    class="w-[7.5rem] border-0 bg-transparent p-0.5 text-xs font-semibold tabular-nums text-zinc-600 focus:ring-0 disabled:opacity-40 dark:text-zinc-300">
+                    class="w-[8rem] border-0 bg-transparent p-0.5 text-[13px] tabular-nums text-zinc-700 focus:ring-0 disabled:opacity-40 dark:text-zinc-200">
             </div>
             @if($hasActiveFilters)
-                <button wire:click="clearFilters" type="button" data-clear-filters class="inline-flex items-center gap-1 rounded-lg bg-zinc-100 px-2.5 py-1.5 text-xs font-bold text-zinc-500 transition hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700"><flux:icon.x-mark class="size-3.5" /> Clear filters</button>
+                <button wire:click="clearFilters" type="button" data-clear-filters class="inline-flex items-center gap-1 rounded-lg bg-zinc-100 px-2.5 py-1.5 text-[13px] font-semibold text-zinc-600 transition hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"><flux:icon.x-mark class="size-4" /> Clear filters</button>
             @endif
         </div>
     </div>
 
-    {{-- What the log shows, in the reader's date format — or why it shows nothing. --}}
-    <div class="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-orange-100/70 px-5 py-2 text-xs dark:border-white/10">
-        @if($rangeError)
-            <span class="inline-flex items-center gap-1.5 font-semibold text-rose-600 dark:text-rose-400" role="alert" data-range-error><flux:icon.exclamation-triangle class="size-3.5" /> {{ $rangeError }}</span>
-        @else
-            <span class="text-zinc-500 dark:text-zinc-400" data-showing>Showing <span class="font-bold text-zinc-800 dark:text-zinc-100">{{ $showingLabel }}</span>{{ $date ? ' (single day)' : '' }}</span>
-        @endif
-    </div>
-
-    {{-- Audit: one click narrows the log to what HR checks — late entries, missed punches, multiple breaks. --}}
+    {{-- What the log shows (or why nothing), the audit filters, and how to read the bar. --}}
     @php
         $auditChip = fn (bool $active, string $tone) => $active
-            ? ['emerald' => 'border-emerald-500 bg-emerald-500 text-white', 'amber' => 'border-amber-500 bg-amber-500 text-white', 'rose' => 'border-rose-500 bg-rose-500 text-white', 'violet' => 'border-violet-500 bg-violet-500 text-white'][$tone]
-            : ['emerald' => 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300', 'amber' => 'border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300', 'rose' => 'border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-300', 'violet' => 'border-violet-200 bg-violet-50 text-violet-700 hover:bg-violet-100 dark:border-violet-500/30 dark:bg-violet-500/10 dark:text-violet-300'][$tone];
+            ? ['amber' => 'border-amber-500 bg-amber-500 text-white', 'rose' => 'border-rose-500 bg-rose-500 text-white', 'violet' => 'border-violet-500 bg-violet-500 text-white'][$tone]
+            : ['amber' => 'border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300', 'rose' => 'border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-300', 'violet' => 'border-violet-200 bg-violet-50 text-violet-700 hover:bg-violet-100 dark:border-violet-500/30 dark:bg-violet-500/10 dark:text-violet-300'][$tone];
     @endphp
-    <div class="flex flex-wrap items-center justify-between gap-2 border-b border-orange-100/70 px-5 py-2.5 dark:border-white/10">
+    <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-orange-100/70 px-5 py-3 dark:border-white/10">
         <div class="flex flex-wrap items-center gap-2" data-audit-chips>
-            <span class="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Audit</span>
+            @if($rangeError)
+                <span class="inline-flex items-center gap-1.5 text-[13px] font-semibold text-rose-600 dark:text-rose-400" role="alert" data-range-error><flux:icon.exclamation-triangle class="size-4" /> {{ $rangeError }}</span>
+            @else
+                <span class="mr-1 text-[13px] text-zinc-500 dark:text-zinc-400" data-showing><span class="font-semibold text-zinc-800 dark:text-zinc-100">{{ $showingLabel }}</span>{{ $date ? ' (single day)' : '' }}</span>
+            @endif
             @foreach([
-                ['late', 'Late entries', $stats['late'], 'amber'],
+                ['late', 'Late', $stats['late'], 'amber'],
                 ['missed_punch', 'Missed punches', $auditCounts['missed'] ?? null, 'rose'],
                 ['multiple_breaks', 'Multiple breaks', $auditCounts['multiple_breaks'] ?? null, 'violet'],
             ] as [$key, $chipLabel, $count, $tone])
                 <button type="button" wire:click="$set('status', '{{ $status === $key ? '' : $key }}')" data-audit-chip="{{ $key }}"
-                    class="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-bold transition {{ $auditChip($status === $key, $tone) }}">
+                    class="inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold transition {{ $auditChip($status === $key, $tone) }}">
                     {{ $chipLabel }} <span class="tabular-nums">{{ $count ?? '—' }}</span>
                 </button>
             @endforeach
-            @if($auditCounts)
-                <span class="text-[11px] text-zinc-500 dark:text-zinc-400">{{ $auditCounts['with_breaks'] }} with a break{{ $auditCounts['duplicates'] ? ' · '.$auditCounts['duplicates'].' with duplicate scans' : '' }}</span>
-            @else
-                <span class="text-[11px] text-zinc-500 dark:text-zinc-400">Narrow the dates or employees to count missed punches and breaks.</span>
-            @endif
+            @unless($auditCounts)
+                <span class="text-xs text-zinc-500 dark:text-zinc-400">Narrow the dates or employees to count missed punches and breaks.</span>
+            @endunless
         </div>
-        {{-- How to read the timeline and the worked bar. --}}
-        <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] font-semibold text-zinc-500 dark:text-zinc-400" data-log-legend>
-            <span class="inline-flex items-center gap-1"><span class="h-2 w-4 rounded-full bg-orange-200 ring-1 ring-inset ring-orange-300"></span> Shift</span>
-            <span class="inline-flex items-center gap-1"><span class="h-2 w-4 rounded-full bg-emerald-500"></span> Worked</span>
-            <span class="inline-flex items-center gap-1"><span class="h-2 w-4 rounded-full bg-amber-400"></span> Auto check-out</span>
-            <span class="inline-flex items-center gap-1"><span class="h-2 w-4 rounded-full border border-dashed border-rose-400 bg-rose-100"></span> No check-out</span>
-            <span class="inline-flex items-center gap-1"><span class="size-2 rotate-45 rounded-[2px] bg-rose-500"></span> Missed punch</span>
+        <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-zinc-500 dark:text-zinc-400" data-log-legend>
+            <span class="inline-flex items-center gap-1.5"><span class="h-2 w-4 rounded-full bg-orange-200 ring-1 ring-inset ring-orange-300"></span> Shift</span>
+            <span class="inline-flex items-center gap-1.5"><span class="h-2 w-4 rounded-full bg-emerald-500"></span> Worked</span>
+            <span class="inline-flex items-center gap-1.5"><span class="h-2 w-4 rounded-full bg-amber-400"></span> Auto check-out</span>
+            <span class="inline-flex items-center gap-1.5"><span class="h-2 w-4 rounded-full border border-dashed border-rose-400 bg-rose-100"></span> No check-out</span>
+            <span class="inline-flex items-center gap-1.5"><span class="size-2 rotate-45 rounded-[2px] bg-rose-500"></span> Missed punch</span>
         </div>
     </div>
 
@@ -324,56 +322,48 @@
 
     <div class="overflow-x-auto">
         @if($attendances->count() > 0)
-            <table class="w-full min-w-[1180px] text-left" data-log-table>
+            <table class="w-full min-w-[1120px] text-left" data-log-table>
                 <thead class="border-b border-orange-100/70 bg-orange-50/40 dark:border-white/10 dark:bg-white/[0.02]">
-                    <tr class="text-[9px] font-bold uppercase tracking-widest text-zinc-400">
-                        <th class="w-[230px] px-5 py-2.5">Employee</th>
-                        <th class="w-[150px] py-2.5">In · Out</th>
-                        <th class="px-3 py-2.5">Day timeline &amp; punches</th>
-                        <th class="w-[170px] py-2.5 pr-4">Worked vs shift</th>
-                        <th class="w-[90px] py-2.5">Breaks</th>
+                    <tr class="text-[11px] font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                        <th class="w-[220px] px-5 py-2.5">Employee</th>
+                        <th class="w-[130px] py-2.5">In · Out</th>
+                        <th class="px-4 py-2.5">Day</th>
+                        <th class="w-[180px] py-2.5 pr-5">Worked vs shift</th>
+                        <th class="w-[96px] py-2.5">Breaks</th>
                         <th class="w-[150px] py-2.5">Status</th>
-                        <th class="w-[150px] px-5 py-2.5 text-right">Actions</th>
+                        <th class="w-[130px] px-5 py-2.5 text-right"><span class="sr-only">Actions</span></th>
                     </tr>
                 </thead>
                 @foreach(collect($attendances->items())->groupBy(fn ($a) => $a->date->toDateString()) as $groupDate => $groupRows)
                     @php
                         $group = $dayGroups[$groupDate] ?? ['window' => AttendanceRegister::window([]), 'records' => $groupRows->count(), 'present' => 0, 'late' => 0, 'missed' => null];
-                        $groupTicks = $ticksFor($group['window']);
+                        $groupTicks = $ticksFor($group['window'], 4);
                         $groupDay = \Carbon\CarbonImmutable::parse($groupDate);
                     @endphp
-                    <tbody wire:key="log-day-{{ $groupDate }}" data-log-date="{{ $groupDate }}" class="divide-y divide-zinc-100/80 border-b border-orange-100/70 dark:divide-white/5 dark:border-white/10">
-                        <tr class="bg-gradient-to-r from-orange-50/90 via-orange-50/30 to-transparent dark:from-white/[0.04] dark:via-transparent">
+                    <tbody wire:key="log-day-{{ $groupDate }}" data-log-date="{{ $groupDate }}" class="divide-y divide-zinc-100 border-b border-orange-100/70 dark:divide-white/5 dark:border-white/10">
+                        <tr class="bg-orange-50/50 dark:bg-white/[0.03]">
                             <td colspan="2" class="px-5 py-2.5">
-                                <div class="flex items-center gap-3">
-                                    <span class="flex size-10 shrink-0 flex-col items-center justify-center rounded-xl bg-white leading-none shadow-sm ring-1 ring-orange-100 dark:bg-zinc-900 dark:ring-white/10">
-                                        <span class="text-[8px] font-bold uppercase tracking-wider text-orange-500">{{ $groupDay->format('M') }}</span>
-                                        <span class="mt-0.5 text-sm font-black text-zinc-900 dark:text-white">{{ $groupDay->format('d') }}</span>
-                                    </span>
-                                    <div>
-                                        <div class="flex items-center gap-1.5 text-xs font-black text-zinc-900 dark:text-white">{{ $groupDay->format('l') }}
-                                            @if($groupDay->isToday())<span class="rounded-full bg-emerald-100 px-1.5 py-px text-[9px] font-bold uppercase text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300">Today</span>@endif
-                                        </div>
-                                        <div class="text-[10px] text-zinc-500 dark:text-zinc-400">{{ $groupDay->userDate() }}</div>
-                                    </div>
+                                <div class="flex items-center gap-2.5">
+                                    <flux:icon.calendar-days class="size-4 text-orange-500" />
+                                    <span class="text-[13px] font-semibold text-zinc-900 dark:text-white">{{ $groupDay->format('l') }}, {{ $groupDay->userDate() }}</span>
+                                    @if($groupDay->isToday())<span class="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300">Today</span>@endif
                                 </div>
                             </td>
-                            <td class="px-3 pb-1.5 pt-2.5 align-bottom">
-                                <div class="relative h-3.5" aria-hidden="true">
+                            <td class="px-4 pb-1 pt-2.5 align-bottom">
+                                <div class="relative h-4" aria-hidden="true">
                                     @foreach($groupTicks as $tick)
-                                        @if($tick['pct'] > 2 && $tick['pct'] < 98)
-                                            <span class="absolute -translate-x-1/2 whitespace-nowrap text-[9px] font-semibold tabular-nums text-zinc-400" style="left: {{ $tick['pct'] }}%">{{ $hourAt($tick['at']) }}</span>
+                                        @if($tick['pct'] > 3 && $tick['pct'] < 97)
+                                            <span class="absolute -translate-x-1/2 whitespace-nowrap text-[11px] tabular-nums text-zinc-400" style="left: {{ $tick['pct'] }}%">{{ $hourAt($tick['at']) }}</span>
                                         @endif
                                     @endforeach
                                 </div>
                             </td>
-                            <td colspan="4" class="px-5 py-2.5">
-                                <div class="flex flex-wrap items-center justify-end gap-1.5 text-[10px] font-bold" data-log-date-totals>
-                                    <span class="rounded-full bg-white px-2 py-0.5 text-zinc-600 ring-1 ring-inset ring-zinc-200 dark:bg-zinc-900 dark:text-zinc-300 dark:ring-white/10">{{ $group['records'] }} {{ \Illuminate\Support\Str::plural('record', $group['records']) }}</span>
-                                    <span class="rounded-full bg-emerald-50 px-2 py-0.5 text-emerald-700 ring-1 ring-inset ring-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:ring-emerald-500/30">{{ $group['present'] }} present</span>
-                                    @if($group['late'] > 0)<span class="rounded-full bg-amber-50 px-2 py-0.5 text-amber-700 ring-1 ring-inset ring-amber-200 dark:bg-amber-500/10 dark:text-amber-300 dark:ring-amber-500/30">{{ $group['late'] }} late</span>@endif
-                                    @if(($group['missed'] ?? 0) > 0)<span class="rounded-full bg-rose-50 px-2 py-0.5 text-rose-700 ring-1 ring-inset ring-rose-200 dark:bg-rose-500/10 dark:text-rose-300 dark:ring-rose-500/30">{{ $group['missed'] }} missed {{ \Illuminate\Support\Str::plural('punch', $group['missed']) }}</span>@endif
-                                </div>
+                            <td colspan="4" class="px-5 py-2.5 text-right">
+                                <span class="text-xs text-zinc-500 dark:text-zinc-400" data-log-date-totals>
+                                    <span class="font-semibold text-zinc-700 dark:text-zinc-200">{{ $group['present'] }}</span> present
+                                    @if($group['late'] > 0) · <span class="font-semibold text-amber-700 dark:text-amber-400">{{ $group['late'] }}</span> late @endif
+                                    @if(($group['missed'] ?? 0) > 0) · <span class="font-semibold text-rose-600 dark:text-rose-400">{{ $group['missed'] }}</span> missed {{ \Illuminate\Support\Str::plural('punch', $group['missed']) }} @endif
+                                </span>
                             </td>
                         </tr>
 
@@ -381,155 +371,142 @@
                             @php
                                 $line = $lines[$log->employee_id.'|'.$groupDate] ?? null;
                                 $name = $log->employee?->user?->name ?? '—';
-                                $initials = \App\Services\Attendance\LiveAttendanceService::initials($name);
                                 $offLabel = $log->weeklyOffLabel();
-                                [$badge, $statusLabel] = $offLabel ? ['bg-zinc-100 text-zinc-600 ring-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:ring-white/10', $offLabel] : match ($log->status) {
-                                    'on_time' => ['bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:ring-emerald-500/30', 'Present'],
-                                    'late' => ['bg-amber-50 text-amber-700 ring-amber-200 dark:bg-amber-500/10 dark:text-amber-300 dark:ring-amber-500/30', 'Late'],
-                                    'absent' => ['bg-rose-50 text-rose-600 ring-rose-200 dark:bg-rose-500/10 dark:text-rose-300 dark:ring-rose-500/30', 'Absent'],
-                                    'remote' => ['bg-sky-50 text-sky-700 ring-sky-200 dark:bg-sky-500/10 dark:text-sky-300 dark:ring-sky-500/30', 'Remote'],
-                                    default => ['bg-zinc-50 text-zinc-500 ring-zinc-200 dark:bg-zinc-800/50 dark:text-zinc-400 dark:ring-white/10', ucfirst($log->status ?? '—')],
+                                $lateMinutes = $log->is_late ? (int) ($log->late_minutes ?? 0) : 0;
+                                [$badge, $statusLabel] = $offLabel ? [$chipTone['zinc'], $offLabel] : match ($log->status) {
+                                    'on_time' => [$chipTone['green'], 'Present'],
+                                    'late' => [$chipTone['amber'], 'Late'],
+                                    'absent' => [$chipTone['red'], 'Absent'],
+                                    'remote' => [$chipTone['blue'], 'Remote'],
+                                    default => [$chipTone['zinc'], ucfirst($log->status ?? '—')],
                                 };
+                                if (! $offLabel && $log->is_late && $log->status !== 'late') {
+                                    [$badge, $statusLabel] = [$chipTone['amber'], 'Late'];
+                                }
                                 $rowMode = AttendanceMode::tryFromValue($log->work_mode ?? 'office');
-                                $methods = collect([PunchMethod::tryFrom((string) $log->check_in_method), PunchMethod::tryFrom((string) $log->check_out_method)])->filter()->unique();
+                                // Face (IN) and ID card (OUT) are the norm — say the method only when it is something else.
+                                $oddMethods = collect([PunchMethod::tryFrom((string) $log->check_in_method), PunchMethod::tryFrom((string) $log->check_out_method)])
+                                    ->filter(fn ($m) => $m && ! in_array($m, [PunchMethod::Face, PunchMethod::IdCard], true))->unique();
                                 $rowAudit = $audit[$log->id] ?? null;
                                 $rowState = $rowStatus[$log->id] ?? [];
                                 $pct = $line && $line['expected_minutes'] > 0 ? (int) floor($line['worked_minutes'] * 100 / $line['expected_minutes']) : 0;
+                                $missedCount = max($line['missed_count'] ?? 0, ($rowAudit['missed'] ?? false) ? 1 : 0);
                             @endphp
                             <tr wire:key="log-{{ $log->id }}" wire:click="openDayHistory({{ $log->employee_id }}, '{{ $groupDate }}')" data-log-row="{{ $log->id }}"
-                                class="group cursor-pointer align-top text-xs transition {{ $log->is_regularized ? 'bg-blue-50/50 hover:bg-blue-50 dark:bg-blue-950/20' : 'hover:bg-orange-50/50 dark:hover:bg-white/[0.03]' }}">
+                                class="cursor-pointer align-middle text-[13px] text-zinc-700 transition dark:text-zinc-200 {{ $log->is_regularized ? 'bg-blue-50/40 hover:bg-blue-50 dark:bg-blue-950/20' : 'hover:bg-orange-50/50 dark:hover:bg-white/[0.03]' }}">
                                 {{-- Employee --}}
                                 <td class="px-5 py-3">
                                     <div class="flex items-center gap-3">
                                         <div class="relative shrink-0">
-                                            <div class="flex size-9 items-center justify-center rounded-full bg-gradient-to-br from-orange-400 to-amber-400 text-[11px] font-black text-white shadow-sm shadow-orange-200 dark:shadow-none">{{ $initials }}</div>
+                                            <div class="flex size-9 items-center justify-center rounded-full bg-orange-100 text-xs font-semibold text-orange-700 dark:bg-orange-500/15 dark:text-orange-300">{{ $line['initials'] ?? \App\Services\Attendance\LiveAttendanceService::initials($name) }}</div>
                                             @if($line['live'] ?? false)<span class="absolute -bottom-0.5 -right-0.5 size-3 rounded-full border-2 border-white bg-emerald-500 dark:border-zinc-900" title="In now"></span>@endif
                                         </div>
                                         <div class="min-w-0">
-                                            <div class="truncate font-black text-zinc-900 dark:text-white">{{ $name }}</div>
-                                            <div class="truncate text-[10px] text-zinc-400">{{ $log->employee?->employee_id ?? '—' }}@if($line && $line['department'] !== '—') · {{ $line['department'] }}@endif</div>
-                                            @if((string) $filterEmployee !== (string) $log->employee_id)
-                                                <button type="button" wire:click.stop="$set('filterEmployee', '{{ $log->employee_id }}')" class="text-[10px] font-semibold text-orange-600 hover:underline dark:text-orange-400" data-open-punch-log="{{ $log->employee_id }}">Punch log</button>
-                                            @endif
+                                            <div class="truncate font-semibold text-zinc-900 dark:text-white">{{ $name }}</div>
+                                            <div class="truncate text-xs text-zinc-500 dark:text-zinc-400">{{ $log->employee?->employee_id ?? '—' }}@if($line && $line['department'] !== '—') · {{ $line['department'] }}@endif</div>
                                         </div>
                                     </div>
                                 </td>
 
                                 {{-- In · Out --}}
                                 <td class="py-3 pr-3">
-                                    <div class="space-y-1 font-mono tabular-nums">
-                                        <div class="flex flex-wrap items-center gap-1.5">
-                                            <span class="size-1.5 shrink-0 rounded-full bg-emerald-500"></span>
-                                            <span class="font-bold {{ $log->is_regularized ? 'text-blue-600 dark:text-blue-300' : 'text-zinc-800 dark:text-zinc-100' }}">{{ $log->check_in?->toImmutable()->userTime() ?? '—' }}</span>
-                                            @if($log->is_late)<span class="rounded bg-amber-50 px-1 py-px font-sans text-[9px] font-bold text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">+{{ (int) ($log->late_minutes ?? 0) }}m late</span>@endif
-                                        </div>
-                                        @if($log->original_check_in && $log->check_in && ! $log->original_check_in->equalTo($log->check_in))
-                                            <div class="pl-3 text-[9px] font-semibold text-zinc-400 line-through" title="Original punch (preserved)">{{ $log->original_check_in->toImmutable()->userTime() }}</div>
-                                        @endif
-                                        <div class="flex flex-wrap items-center gap-1.5">
-                                            <span class="size-1.5 shrink-0 rounded-full bg-orange-500"></span>
-                                            @if($log->check_out)
-                                                <span class="font-bold {{ $log->is_auto_checkout ? 'text-orange-500' : ($log->is_regularized ? 'text-blue-600 dark:text-blue-300' : 'text-zinc-800 dark:text-zinc-100') }}">{{ $log->check_out->toImmutable()->userTime() }}</span>
-                                                @if($log->is_auto_checkout)<span class="rounded bg-orange-50 px-1 py-px font-sans text-[9px] font-bold uppercase text-orange-600 dark:bg-orange-500/10" title="System auto punch-out — please regularize">Auto OUT</span>@endif
-                                            @elseif($log->check_in && ($rowState['live'] ?? false))
-                                                <span class="inline-flex items-center gap-1 font-sans font-bold text-emerald-600" data-attendance-state="{{ $rowState['state'] }}"><span class="size-1.5 animate-pulse rounded-full bg-emerald-500"></span> {{ ($rowState['on_break'] ?? false) ? 'ON BREAK' : 'LIVE' }}</span>
-                                            @elseif($log->check_in && ($rowState['last_out'] ?? null))
-                                                <span class="font-bold text-zinc-800 dark:text-zinc-100" data-attendance-state="completed">{{ $rowState['last_out']->toImmutable()->userTime() }}</span>
-                                            @elseif($log->check_in)
-                                                <span class="font-sans font-bold text-rose-500" data-attendance-state="missing_checkout">missing</span>
-                                            @else
-                                                <span class="text-zinc-300">—</span>
-                                            @endif
-                                        </div>
-                                        @if($log->original_check_out && $log->check_out && ! $log->original_check_out->equalTo($log->check_out))
-                                            <div class="pl-3 text-[9px] font-semibold text-zinc-400 line-through" title="Original punch (preserved)">{{ $log->original_check_out->toImmutable()->userTime() }}</div>
+                                    <div class="whitespace-nowrap font-semibold tabular-nums {{ $log->is_regularized ? 'text-blue-700 dark:text-blue-300' : 'text-zinc-900 dark:text-white' }}">
+                                        {{ $log->check_in?->toImmutable()->userTime() ?? '—' }}
+                                        <span class="font-normal text-zinc-300 dark:text-zinc-600">→</span>
+                                        @if($log->check_out)
+                                            <span class="{{ $log->is_auto_checkout ? 'text-orange-600 dark:text-orange-400' : '' }}">{{ $log->check_out->toImmutable()->userTime() }}</span>
+                                        @elseif($log->check_in && ($rowState['live'] ?? false))
+                                            <span class="inline-flex items-center gap-1 font-medium text-emerald-600 dark:text-emerald-400" data-attendance-state="{{ $rowState['state'] }}"><span class="size-1.5 animate-pulse rounded-full bg-emerald-500"></span>{{ ($rowState['on_break'] ?? false) ? 'On break' : 'In now' }}</span>
+                                        @elseif($log->check_in && ($rowState['last_out'] ?? null))
+                                            <span data-attendance-state="completed">{{ $rowState['last_out']->toImmutable()->userTime() }}</span>
+                                        @elseif($log->check_in)
+                                            <span class="font-medium text-rose-600 dark:text-rose-400" data-attendance-state="missing_checkout">no out</span>
+                                        @else
+                                            <span class="text-zinc-300">—</span>
                                         @endif
                                     </div>
-                                    @if($methods->isNotEmpty())
-                                        <div class="mt-1.5 flex flex-wrap gap-1">
-                                            @foreach($methods as $m)
-                                                <span class="inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[9px] font-bold {{ $m->chipClass() }}" title="{{ $m->labelWithGuidance() }}"><flux:icon :icon="$m->icon()" class="size-2.5" /> {{ $m->label() }}</span>
-                                            @endforeach
-                                        </div>
+                                    @php
+                                        $inNote = collect([
+                                            $log->is_auto_checkout ? 'Closed by the auto check-out' : null,
+                                            $log->original_check_in && $log->check_in && ! $log->original_check_in->equalTo($log->check_in) ? 'In was '.$log->original_check_in->toImmutable()->userTime() : null,
+                                            $log->original_check_out && $log->check_out && ! $log->original_check_out->equalTo($log->check_out) ? 'Out was '.$log->original_check_out->toImmutable()->userTime() : null,
+                                            $oddMethods->isNotEmpty() ? $oddMethods->map->label()->implode(' / ') : null,
+                                        ])->filter();
+                                    @endphp
+                                    @if($inNote->isNotEmpty())
+                                        <div class="mt-0.5 text-xs {{ $log->is_auto_checkout ? 'text-orange-600 dark:text-orange-400' : 'text-zinc-500 dark:text-zinc-400' }}">{{ $inNote->implode(' · ') }}</div>
                                     @endif
                                 </td>
 
-                                {{-- Day timeline + every punch --}}
-                                <td class="px-3 py-3" data-punches>
+                                {{-- The day: timeline bar, and every punch on hover --}}
+                                <td class="px-4 py-3" data-punches>
                                     @if($line)
                                         @include('livewire.attendance.partials.day-timeline-bar', ['line' => $line, 'window' => $group['window'], 'ticks' => $groupTicks, 'size' => 'sm'])
                                     @endif
-                                    <div class="mt-2 flex items-start justify-between gap-2">
+                                    <div class="mt-1.5" wire:click.stop>
                                         <x-attendance.punch-timeline :punches="$punchesByDay[$log->employee_id.'|'.$groupDate] ?? []" :title="'All punches — '.$log->date->toImmutable()->userDate()" />
-                                        @if($line && ($line['missed_count'] > 0 || $line['extra_taps'] > 0))
-                                            <div class="shrink-0 space-y-0.5 text-right text-[9px] font-bold">
-                                                @if($line['missed_count'] > 0)<div class="text-rose-600 dark:text-rose-400">{{ $line['missed_count'] }} missed</div>@endif
-                                                @if($line['extra_taps'] > 0)<div class="text-zinc-400">{{ $line['extra_taps'] }} extra {{ \Illuminate\Support\Str::plural('tap', $line['extra_taps']) }}</div>@endif
-                                            </div>
-                                        @endif
                                     </div>
                                 </td>
 
                                 {{-- Worked vs shift --}}
-                                <td class="py-3 pr-4" data-worked-cell>
+                                <td class="py-3 pr-5" data-worked-cell>
                                     @if($line && $line['missing_checkout'])
-                                        <div class="text-[11px] font-bold text-rose-600 dark:text-rose-400">No check-out</div>
-                                        <div class="mt-0.5 text-[10px] leading-snug text-zinc-400">Not counted until the day is regularised</div>
+                                        <div class="font-semibold text-rose-600 dark:text-rose-400">Not counted</div>
+                                        <div class="text-xs text-zinc-500 dark:text-zinc-400">No check-out punch</div>
                                     @elseif($line && $line['present'])
-                                        <div class="flex items-baseline justify-between gap-2">
-                                            <span class="text-sm font-black tabular-nums text-zinc-900 dark:text-white">{{ $hm($line['worked_minutes']) }}</span>
-                                            <span class="text-[10px] font-black tabular-nums {{ $progressText[$line['progress']] }}">{{ $pct }}%</span>
+                                        <div class="flex items-baseline justify-between gap-2 tabular-nums">
+                                            <span><span class="font-semibold text-zinc-900 dark:text-white">{{ $short($line['worked_minutes']) }}</span> <span class="text-xs text-zinc-400">/ {{ $shiftLength($line['expected_minutes']) }}{{ $line['live'] ? ' so far' : '' }}</span></span>
+                                            <span class="text-xs font-semibold {{ $progressText[$line['progress']] }}">{{ $pct }}%</span>
                                         </div>
-                                        <div class="mt-1 h-1.5 overflow-hidden rounded-full bg-zinc-100 dark:bg-white/10">
-                                            <div class="h-full rounded-full {{ $progressBar[$line['progress']] }} {{ $line['live'] ? 'animate-pulse' : '' }}" style="width: {{ min(100, $pct) }}%"></div>
-                                        </div>
-                                        <div class="mt-1 flex flex-wrap items-center gap-1 text-[10px] text-zinc-400">
-                                            of {{ $hm($line['expected_minutes']) }}{{ $line['live'] ? ' · so far' : '' }}
-                                            @if($line['ot_minutes'] > 0)<span class="rounded bg-violet-50 px-1 py-px font-bold text-violet-700 dark:bg-violet-500/10 dark:text-violet-300">+{{ $short($line['ot_minutes']) }} OT</span>@endif
+                                        <div class="mt-1.5 h-1.5 overflow-hidden rounded-full bg-zinc-100 dark:bg-white/10" title="{{ $pct }}% of a {{ $shiftLength($line['expected_minutes']) }} shift{{ $line['ot_minutes'] > 0 ? ' · '.$short($line['ot_minutes']).' approved overtime' : '' }}">
+                                            <div class="h-full rounded-full {{ $progressBar[$line['progress']] }}" style="width: {{ min(100, $pct) }}%"></div>
                                         </div>
                                     @else
                                         @php $hrs = app(\App\Services\Attendance\AttendanceCalculator::class)->workedHours($log); @endphp
-                                        <span class="font-black tabular-nums {{ $hrs > 0 ? 'text-zinc-800 dark:text-zinc-100' : 'text-zinc-300' }}">{{ $hrs > 0 ? number_format($hrs, 1).'h' : '—' }}</span>
+                                        <span class="font-semibold tabular-nums {{ $hrs > 0 ? 'text-zinc-900 dark:text-white' : 'text-zinc-300' }}">{{ $hrs > 0 ? number_format($hrs, 1).'h' : '—' }}</span>
                                     @endif
                                 </td>
 
                                 {{-- Breaks --}}
                                 <td class="py-3" data-break-cell>
-                                    @php $breakMinutes = $line['break_minutes'] ?? (int) ($log->break_minutes ?? 0); @endphp
-                                    <div class="font-bold tabular-nums {{ ($line['excess_break'] ?? false) ? 'text-rose-600 dark:text-rose-400' : 'text-zinc-700 dark:text-zinc-200' }}">{{ $short($breakMinutes) }}</div>
-                                    @if(($rowAudit['breaks'] ?? 0) > 0)
-                                        <div class="text-[9px] font-bold {{ $rowAudit['breaks'] >= 2 ? 'text-violet-600 dark:text-violet-300' : 'text-zinc-400' }}">{{ $rowAudit['breaks'] }} {{ \Illuminate\Support\Str::plural('break', $rowAudit['breaks']) }}</div>
+                                    @php $breaks = (int) ($rowAudit['breaks'] ?? 0); @endphp
+                                    @if($breaks > 0 || ($line['break_minutes'] ?? 0) > 0)
+                                        <div class="font-semibold tabular-nums {{ ($line['excess_break'] ?? false) ? 'text-rose-600 dark:text-rose-400' : 'text-zinc-900 dark:text-white' }}">{{ $short($line['break_minutes'] ?? (int) ($log->break_minutes ?? 0)) }}</div>
+                                        <div class="text-xs {{ $breaks >= 2 ? 'text-violet-600 dark:text-violet-300' : 'text-zinc-500 dark:text-zinc-400' }}">{{ $breaks }} {{ \Illuminate\Support\Str::plural('break', $breaks) }}</div>
+                                    @else
+                                        <span class="text-zinc-300 dark:text-zinc-600">—</span>
                                     @endif
                                 </td>
 
-                                {{-- Status + flags --}}
+                                {{-- Status: one chip, then only the exceptions --}}
                                 <td class="py-3">
-                                    <div class="flex flex-wrap items-center gap-1">
-                                        <span class="rounded-full px-2 py-0.5 text-[10px] font-bold ring-1 ring-inset {{ $badge }}">{{ $statusLabel }}</span>
-                                        @if($rowMode)<span class="rounded px-1.5 py-0.5 text-[8px] font-bold uppercase {{ $rowMode->chipClass() }}">{{ $rowMode->shortLabel() }}</span>@endif
-                                    </div>
-                                    <div class="mt-1 flex flex-wrap gap-1">
-                                        @if($rowAudit['missed'] ?? false)<span class="rounded-full bg-rose-50 px-2 py-0.5 text-[9px] font-bold text-rose-600 dark:bg-rose-500/10 dark:text-rose-300" data-flag="missed_punch">Missed punch</span>@endif
-                                        @if(($rowAudit['duplicates'] ?? 0) > 0)<span class="rounded-full bg-zinc-100 px-2 py-0.5 text-[9px] font-bold text-zinc-500 dark:bg-white/10 dark:text-zinc-300" data-flag="duplicate" title="Scanned more than once within a minute — counted once">Duplicate scan</span>@endif
-                                        @if($log->is_regularized)<span class="inline-flex items-center gap-0.5 rounded-full bg-blue-50 px-2 py-0.5 text-[9px] font-bold text-blue-600 dark:bg-blue-500/10 dark:text-blue-300"><flux:icon.pencil-square class="size-2.5" /> Regularised</span>@endif
-                                    </div>
+                                    <span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1 ring-inset {{ $badge }}">{{ $statusLabel }}@if($lateMinutes > 0 && ! $offLabel)<span class="ml-1 font-medium opacity-80">· {{ $short($lateMinutes) }}</span>@endif</span>
+                                    @php $flags = ($rowAudit['missed'] ?? false) || $log->is_regularized || ($rowMode && $rowMode->value !== 'office'); @endphp
+                                    @if($flags)
+                                        <div class="mt-1 flex flex-wrap gap-x-2 gap-y-0.5 text-xs font-medium">
+                                            @if($rowAudit['missed'] ?? false)<span class="text-rose-600 dark:text-rose-400" data-flag="missed_punch">{{ $missedCount > 1 ? $missedCount.' missed punches' : 'Missed punch' }}</span>@endif
+                                            @if($log->is_regularized)<span class="text-blue-600 dark:text-blue-300">Regularised</span>@endif
+                                            @if($rowMode && $rowMode->value !== 'office')<span class="text-sky-600 dark:text-sky-300">{{ $rowMode->shortLabel() }}</span>@endif
+                                        </div>
+                                    @endif
                                 </td>
 
                                 {{-- Actions --}}
                                 <td class="px-5 py-3 text-right" wire:click.stop>
                                     <div class="inline-flex items-center gap-1">
                                         <button type="button" wire:click="openDayHistory({{ $log->employee_id }}, '{{ $groupDate }}')" data-day-history-open="{{ $log->id }}"
-                                            class="inline-flex items-center gap-1 rounded-lg border border-orange-200 bg-white px-2.5 py-1.5 text-[11px] font-bold text-orange-600 shadow-sm transition hover:border-orange-300 hover:bg-orange-50 dark:border-orange-500/30 dark:bg-zinc-900 dark:text-orange-400 dark:hover:bg-orange-500/10">
-                                            <flux:icon.clock class="size-3.5" /> History
+                                            class="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-zinc-700 transition hover:border-orange-300 hover:bg-orange-50 hover:text-orange-700 dark:border-white/10 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-orange-500/10">
+                                            <flux:icon.clock class="size-4" /> History
                                         </button>
                                         <flux:dropdown position="bottom" align="end">
-                                            <button type="button" class="inline-flex size-7 items-center justify-center rounded-lg text-zinc-400 transition hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-white/10 dark:hover:text-zinc-200" aria-label="More actions for {{ $name }}"><flux:icon.ellipsis-vertical class="size-4" /></button>
+                                            <button type="button" class="inline-flex size-8 items-center justify-center rounded-lg text-zinc-400 transition hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-white/10 dark:hover:text-zinc-200" aria-label="More actions for {{ $name }}"><flux:icon.ellipsis-vertical class="size-4" /></button>
                                             <flux:menu>
-                                                <flux:menu.item icon="clock" wire:click="openDayHistory({{ $log->employee_id }}, '{{ $groupDate }}')">Day history</flux:menu.item>
                                                 <flux:menu.item icon="identification" wire:click="openEmployeeDrawer({{ $log->employee_id }})">Employee 360°</flux:menu.item>
-                                                <flux:menu.item icon="list-bullet" wire:click="$set('filterEmployee', '{{ $log->employee_id }}')">Punch log for the range</flux:menu.item>
+                                                @if((string) $filterEmployee !== (string) $log->employee_id)
+                                                    <flux:menu.item icon="list-bullet" wire:click="$set('filterEmployee', '{{ $log->employee_id }}')" data-open-punch-log="{{ $log->employee_id }}">Punch log for the range</flux:menu.item>
+                                                @endif
                                                 @if($canSeeLive)
-                                                    <flux:menu.item icon="signal" href="{{ route('attendance.live', ['tab' => 'employee', 'employee' => $log->employee_id, 'from' => $log->date->copy()->subDays(29)->toDateString(), 'to' => $groupDate]) }}">Last 30 days on the Live board</flux:menu.item>
+                                                    <flux:menu.item icon="signal" href="{{ route('attendance.live', ['tab' => 'employee', 'employee' => $log->employee_id, 'from' => $log->date->copy()->subDays(29)->toDateString(), 'to' => $groupDate]) }}">Last 30 days</flux:menu.item>
                                                 @endif
                                                 @if($canCorrect)
                                                     <flux:menu.separator />
@@ -545,16 +522,15 @@
                 @endforeach
             </table>
         @else
-            <div class="py-14 text-center text-sm text-zinc-400">
+            <div class="py-14 text-center text-sm text-zinc-500">
                 <flux:icon.calendar-days class="mx-auto mb-2 size-9 opacity-30" />
                 {{ $rangeError ? 'Fix the dates to see attendance records.' : 'No attendance records for these filters.' }}
-                <div class="mt-1 text-xs text-zinc-400">Try another week or date range, pick another employee, or clear the filters.</div>
+                <div class="mt-1 text-[13px] text-zinc-400">Try another week or date range, pick another employee, or clear the filters.</div>
             </div>
         @endif
     </div>
     @if($attendances->hasPages())
-        <div class="flex flex-wrap items-center justify-between gap-2 border-t border-orange-100/70 bg-orange-50/30 px-5 py-3 dark:border-white/10 dark:bg-white/[0.02]">
-            <div class="text-xs text-zinc-400">Showing {{ $attendances->firstItem() }}–{{ $attendances->lastItem() }} of {{ $attendances->total() }}</div>
+        <div class="border-t border-orange-100/70 px-5 py-3 dark:border-white/10">
             {{ $attendances->links() }}
         </div>
     @endif
@@ -584,8 +560,8 @@ EMPLOYEE 360 DRAWER (480px, right)
                     @endif
                     <div class="min-w-0">
                         <div class="truncate text-sm font-black text-zinc-900 dark:text-white">{{ $drawer['name'] }}</div>
-                        <div class="text-[10px] text-zinc-400">{{ $drawer['code'] }} · {{ $drawer['designation'] }}</div>
-                        <div class="mt-0.5 flex flex-wrap gap-x-3 text-[10px] text-zinc-500 dark:text-zinc-400">
+                        <div class="text-xs text-zinc-400">{{ $drawer['code'] }} · {{ $drawer['designation'] }}</div>
+                        <div class="mt-0.5 flex flex-wrap gap-x-3 text-xs text-zinc-500 dark:text-zinc-400">
                             <span class="inline-flex items-center gap-1"><flux:icon.building-office-2 class="size-3 text-orange-400" /> {{ $drawer['department'] }}</span>
                             <span class="inline-flex items-center gap-1"><flux:icon.user class="size-3 text-orange-400" /> {{ $drawer['manager'] }}</span>
                         </div>
@@ -601,7 +577,7 @@ EMPLOYEE 360 DRAWER (480px, right)
                             default => ['bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400', 'bg-zinc-400'],
                         };
                     @endphp
-                    <span class="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-bold {{ $dBadge }}"><span class="size-1.5 rounded-full {{ $dDot }}"></span>{{ $drawer['status'] }}</span>
+                    <span class="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-bold {{ $dBadge }}"><span class="size-1.5 rounded-full {{ $dDot }}"></span>{{ $drawer['status'] }}</span>
                     <button type="button" @click="$wire.closeDrawer()" class="rounded-lg p-1 text-zinc-400 transition hover:bg-orange-50 hover:text-zinc-600 dark:text-zinc-300"><flux:icon.x-mark class="size-5" /></button>
                 </div>
             </div>
@@ -619,14 +595,14 @@ EMPLOYEE 360 DRAWER (480px, right)
                     ] as [$k, $v, $c])
                         <div class="rounded-xl border border-orange-100/70 bg-white dark:bg-zinc-900 p-2.5 text-center shadow-sm">
                             <div class="text-sm font-black tabular-nums" style="color: {{ $c }}">{{ $v }}</div>
-                            <div class="text-[8px] font-bold uppercase tracking-wider text-zinc-400">{{ $k }}</div>
+                            <div class="text-[11px] font-bold uppercase tracking-wider text-zinc-400">{{ $k }}</div>
                         </div>
                     @endforeach
                 </div>
 
                 {{-- Today --}}
                 <div class="ui-surface p-4">
-                    <div class="mb-2 text-[10px] font-bold uppercase tracking-widest text-zinc-400">Today</div>
+                    <div class="mb-2 text-xs font-bold uppercase tracking-widest text-zinc-400">Today</div>
                     @if($drawer['today'])
                         <div class="grid grid-cols-3 gap-2 text-center">
                             @foreach([
@@ -634,10 +610,10 @@ EMPLOYEE 360 DRAWER (480px, right)
                                 ['Worked', $drawer['today']['worked']], ['Break', $drawer['today']['break'].'m'],
                                 ['Overtime', $drawer['today']['overtime']], ['Mode', strtoupper($drawer['today']['mode'] ?? '—')],
                             ] as [$k, $v])
-                                <div class="rounded-lg bg-orange-50/50 px-2 py-1.5"><div class="text-xs font-black tabular-nums text-zinc-900 dark:text-white">{{ $v }}</div><div class="text-[8px] font-bold uppercase text-zinc-400">{{ $k }}</div></div>
+                                <div class="rounded-lg bg-orange-50/50 px-2 py-1.5"><div class="text-xs font-black tabular-nums text-zinc-900 dark:text-white">{{ $v }}</div><div class="text-[11px] font-bold uppercase text-zinc-400">{{ $k }}</div></div>
                             @endforeach
                         </div>
-                        <div class="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[10px] text-zinc-500 dark:text-zinc-400">
+                        <div class="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-zinc-500 dark:text-zinc-400">
                             @if($drawer['today']['device'])<span class="inline-flex items-center gap-1"><flux:icon.cpu-chip class="size-3 text-orange-400" /> {{ $drawer['today']['device'] }}</span>@endif
                             @if($drawer['today']['location'])<span class="inline-flex items-center gap-1"><flux:icon.map-pin class="size-3 text-orange-400" /> {{ $drawer['today']['location'] }}</span>@endif
                             @if($drawer['today']['is_late'])<span class="font-bold text-amber-600">Late today</span>@endif
@@ -651,11 +627,11 @@ EMPLOYEE 360 DRAWER (480px, right)
                 @if(! empty($drawer['punches']))
                     <div class="ui-surface p-4" x-data="{ showRaw: false }">
                         <div class="mb-2 flex items-center justify-between">
-                            <span class="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Processed Timeline · {{ $drawer['punch_count'] ?? count($drawer['punches']) }} punches</span>
-                            @if(! empty($drawer['needs_regularization']))<span class="rounded-full bg-amber-100 px-2 py-0.5 text-[9px] font-bold uppercase text-amber-700">Needs Regularization</span>@endif
+                            <span class="text-xs font-bold uppercase tracking-widest text-zinc-400">Processed Timeline · {{ $drawer['punch_count'] ?? count($drawer['punches']) }} punches</span>
+                            @if(! empty($drawer['needs_regularization']))<span class="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-bold uppercase text-amber-700">Needs Regularization</span>@endif
                         </div>
                         @if(! empty($drawer['punches_partial']))
-                            <div class="mb-2 flex items-center gap-1.5 rounded-lg bg-amber-50 px-2.5 py-1 text-[10px] font-semibold text-amber-700 dark:bg-amber-500/10 dark:text-amber-400">
+                            <div class="mb-2 flex items-center gap-1.5 rounded-lg bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700 dark:bg-amber-500/10 dark:text-amber-400">
                                 <flux:icon.information-circle class="size-3.5" /> Partial local stream — full stream in the v2 dashboard.
                             </div>
                         @endif
@@ -665,8 +641,8 @@ EMPLOYEE 360 DRAWER (480px, right)
                                 <div class="flex items-center gap-2 rounded-lg {{ $isMiss ? 'bg-amber-50 dark:bg-amber-500/10' : 'bg-zinc-50/70 dark:bg-zinc-800/40' }} px-2.5 py-1 text-xs">
                                     <flux:icon :icon="$p['icon']" class="size-3.5 {{ $isMiss ? 'text-amber-500' : 'text-orange-400' }}" />
                                     <span class="font-black tabular-nums text-zinc-800 dark:text-zinc-100">{{ $p['time'] }}</span>
-                                    <span class="rounded-full px-1.5 py-0.5 text-[9px] font-bold {{ $isMiss ? 'bg-amber-100 text-amber-700' : (($p['dir'] ?? '') === 'IN' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700') }}">{{ $isMiss ? 'MISSING '.$p['dir'] : $p['dir'] }}</span>
-                                    <span class="text-[10px] text-zinc-400">{{ $p['method'] ?? '' }}@if(! empty($p['guidance'])) · {{ $p['guidance'] }}@endif</span>
+                                    <span class="rounded-full px-1.5 py-0.5 text-[11px] font-bold {{ $isMiss ? 'bg-amber-100 text-amber-700' : (($p['dir'] ?? '') === 'IN' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700') }}">{{ $isMiss ? 'MISSING '.$p['dir'] : $p['dir'] }}</span>
+                                    <span class="text-xs text-zinc-400">{{ $p['method'] ?? '' }}@if(! empty($p['guidance'])) · {{ $p['guidance'] }}@endif</span>
                                 </div>
                             @endforeach
                         </div>
@@ -674,7 +650,7 @@ EMPLOYEE 360 DRAWER (480px, right)
                         @if(! empty($drawer['sessions']))
                             <div class="mt-2 border-t border-zinc-100 dark:border-zinc-800 pt-2 space-y-0.5">
                                 @foreach($drawer['sessions'] as $s)
-                                    <div class="flex items-center justify-between text-[10px] {{ ! empty($s['missing']) ? 'text-amber-600 font-semibold' : 'text-zinc-500 dark:text-zinc-400' }}">
+                                    <div class="flex items-center justify-between text-xs {{ ! empty($s['missing']) ? 'text-amber-600 font-semibold' : 'text-zinc-500 dark:text-zinc-400' }}">
                                         <span>Session {{ $s['index'] }} · {{ $s['in'] ?? '⚠' }} → {{ $s['out'] ?? (! empty($s['live']) ? 'now' : '⚠') }}</span>
                                         <span class="font-bold">{{ $s['label'] }}{{ ! empty($s['live']) ? ' · live' : '' }}</span>
                                     </div>
@@ -683,7 +659,7 @@ EMPLOYEE 360 DRAWER (480px, right)
                         @endif
                         {{-- Raw device log — audit only --}}
                         @if(! empty($drawer['raw_punches']))
-                            <button type="button" @click="showRaw = !showRaw" class="mt-2 flex w-full items-center justify-between border-t border-zinc-100 dark:border-zinc-800 pt-2 text-[10px] font-bold uppercase tracking-widest text-zinc-400 hover:text-orange-500">
+                            <button type="button" @click="showRaw = !showRaw" class="mt-2 flex w-full items-center justify-between border-t border-zinc-100 dark:border-zinc-800 pt-2 text-xs font-bold uppercase tracking-widest text-zinc-400 hover:text-orange-500">
                                 <span>Raw device log · {{ count($drawer['raw_punches']) }} events
                                     @if(($drawer['duplicate_count'] ?? 0) + ($drawer['conflict_count'] ?? 0) > 0)
                                         <span class="ml-1 normal-case tracking-normal font-semibold text-zinc-400">({{ $drawer['duplicate_count'] }} dup · {{ $drawer['conflict_count'] }} retry merged)</span>
@@ -693,11 +669,11 @@ EMPLOYEE 360 DRAWER (480px, right)
                             </button>
                             <div x-show="showRaw" x-collapse class="mt-1 max-h-40 space-y-0.5 overflow-y-auto">
                                 @foreach($drawer['raw_punches'] as $rp)
-                                    <div class="flex items-center gap-2 rounded px-2 py-1 text-[10px] {{ $rp['flag'] === 'kept' ? 'bg-zinc-50/60 dark:bg-zinc-800/30' : 'bg-zinc-50/30 dark:bg-zinc-800/10 opacity-60' }}" @if($rp['note']) title="{{ $rp['note'] }}" @endif>
-                                        <span class="font-mono font-bold tabular-nums text-zinc-700 dark:text-zinc-200">{{ $rp['time'] }}</span>
+                                    <div class="flex items-center gap-2 rounded px-2 py-1 text-xs {{ $rp['flag'] === 'kept' ? 'bg-zinc-50/60 dark:bg-zinc-800/30' : 'bg-zinc-50/30 dark:bg-zinc-800/10 opacity-60' }}" @if($rp['note']) title="{{ $rp['note'] }}" @endif>
+                                        <span class="tabular-nums font-bold text-zinc-700 dark:text-zinc-200">{{ $rp['time'] }}</span>
                                         @if($rp['direction'])<span class="uppercase text-zinc-400">{{ $rp['direction'] }}</span>@endif
                                         <span class="text-zinc-400">{{ $rp['method'] }}@if(! empty($rp['guidance'])) · {{ $rp['guidance'] }}@endif</span>
-                                        <span class="ml-auto rounded-full px-1.5 py-0.5 text-[8px] font-bold uppercase {{ $rp['flag'] === 'kept' ? 'bg-emerald-100 text-emerald-700' : ($rp['flag'] === 'retry' ? 'bg-violet-100 text-violet-700' : 'bg-zinc-200 text-zinc-500 dark:bg-zinc-700 dark:text-zinc-300') }}">{{ $rp['flag'] }}</span>
+                                        <span class="ml-auto rounded-full px-1.5 py-0.5 text-[11px] font-bold uppercase {{ $rp['flag'] === 'kept' ? 'bg-emerald-100 text-emerald-700' : ($rp['flag'] === 'retry' ? 'bg-violet-100 text-violet-700' : 'bg-zinc-200 text-zinc-500 dark:bg-zinc-700 dark:text-zinc-300') }}">{{ $rp['flag'] }}</span>
                                     </div>
                                 @endforeach
                             </div>
@@ -708,31 +684,31 @@ EMPLOYEE 360 DRAWER (480px, right)
                 {{-- Pending regularizations --}}
                 @if(! empty($drawer['pending']))
                     <div class="rounded-2xl border border-amber-300 bg-gradient-to-r from-amber-50 to-orange-50 p-4 shadow-sm">
-                        <div class="mb-2 text-[10px] font-bold uppercase tracking-widest text-amber-700">Pending Regularisation · {{ count($drawer['pending']) }}</div>
+                        <div class="mb-2 text-xs font-bold uppercase tracking-widest text-amber-700">Pending Regularisation · {{ count($drawer['pending']) }}</div>
                         <div class="space-y-2">
                             @foreach($drawer['pending'] as $pr)
                                 <div class="rounded-xl border border-amber-200/70 bg-white/80 dark:bg-zinc-900/80 p-2.5">
                                     <div class="flex items-center justify-between text-xs">
                                         <span class="font-black text-zinc-900 dark:text-white">{{ $pr['date'] }}</span>
                                         <span class="flex items-center gap-1.5">
-                                            @if(! empty($pr['stage']))<span class="rounded-full bg-amber-100 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-amber-700">{{ $pr['stage'] }}</span>@endif
-                                            <span class="font-mono font-bold text-amber-700">{{ $pr['window'] }}</span>
+                                            @if(! empty($pr['stage']))<span class="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-amber-700">{{ $pr['stage'] }}</span>@endif
+                                            <span class="tabular-nums font-bold text-amber-700">{{ $pr['window'] }}</span>
                                         </span>
                                     </div>
-                                    <p class="mt-0.5 truncate text-[10px] italic text-zinc-400">“{{ $pr['reason'] }}”</p>
+                                    <p class="mt-0.5 truncate text-xs italic text-zinc-400">“{{ $pr['reason'] }}”</p>
                                     @if(! empty($pr['handled_by']))
-                                        <div class="mt-1.5 inline-flex items-center gap-1.5 rounded-lg bg-sky-50 px-2.5 py-1 text-[10px] font-bold text-sky-700 dark:bg-sky-500/10 dark:text-sky-400">
+                                        <div class="mt-1.5 inline-flex items-center gap-1.5 rounded-lg bg-sky-50 px-2.5 py-1 text-xs font-bold text-sky-700 dark:bg-sky-500/10 dark:text-sky-400">
                                             <flux:icon.lock-closed class="size-3" /> Being handled by {{ $pr['handled_by'] }}
                                         </div>
                                     @else
                                         <div class="mt-1.5 flex gap-1.5">
                                             @if(! auth()->user()->canApproveRegularisations())
-                                            <span class="inline-flex shrink-0 items-center rounded-lg bg-zinc-100 px-2.5 py-1 text-[10px] font-bold uppercase text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">Awaiting HR</span>
+                                            <span class="inline-flex shrink-0 items-center rounded-lg bg-zinc-100 px-2.5 py-1 text-xs font-bold uppercase text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">Awaiting HR</span>
                                             @else
-                                            <button wire:click="quickApproveRegularisation({{ $pr['id'] }})" class="inline-flex items-center gap-1 rounded-lg bg-emerald-500 px-2.5 py-1 text-[10px] font-bold text-white transition hover:bg-emerald-600"><flux:icon.check class="size-3" /> Approve</button>
-                                            <button wire:click="openReviewModal({{ $pr['id'] }})" class="inline-flex items-center gap-1 rounded-lg bg-rose-500 px-2.5 py-1 text-[10px] font-bold text-white transition hover:bg-rose-600"><flux:icon.x-mark class="size-3" /> Reject</button>
-                                            <button wire:click="openRegularisationEdit({{ $pr['id'] }})" class="inline-flex items-center gap-1 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-2.5 py-1 text-[10px] font-bold text-zinc-600 dark:text-zinc-300 transition hover:bg-zinc-50 dark:bg-zinc-800/50"><flux:icon.pencil-square class="size-3" /> Edit</button>
-                                            <button wire:click="openRegularisationDelete({{ $pr['id'] }})" class="inline-flex items-center gap-1 rounded-lg border border-rose-200 bg-white px-2.5 py-1 text-[10px] font-bold text-rose-600 transition hover:bg-rose-50 dark:border-rose-500/30 dark:bg-zinc-900"><flux:icon.trash class="size-3" /> Delete</button>
+                                            <button wire:click="quickApproveRegularisation({{ $pr['id'] }})" class="inline-flex items-center gap-1 rounded-lg bg-emerald-500 px-2.5 py-1 text-xs font-bold text-white transition hover:bg-emerald-600"><flux:icon.check class="size-3" /> Approve</button>
+                                            <button wire:click="openReviewModal({{ $pr['id'] }})" class="inline-flex items-center gap-1 rounded-lg bg-rose-500 px-2.5 py-1 text-xs font-bold text-white transition hover:bg-rose-600"><flux:icon.x-mark class="size-3" /> Reject</button>
+                                            <button wire:click="openRegularisationEdit({{ $pr['id'] }})" class="inline-flex items-center gap-1 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-2.5 py-1 text-xs font-bold text-zinc-600 dark:text-zinc-300 transition hover:bg-zinc-50 dark:bg-zinc-800/50"><flux:icon.pencil-square class="size-3" /> Edit</button>
+                                            <button wire:click="openRegularisationDelete({{ $pr['id'] }})" class="inline-flex items-center gap-1 rounded-lg border border-rose-200 bg-white px-2.5 py-1 text-xs font-bold text-rose-600 transition hover:bg-rose-50 dark:border-rose-500/30 dark:bg-zinc-900"><flux:icon.trash class="size-3" /> Delete</button>
                                             @endif
                                         </div>
                                     @endif
@@ -745,26 +721,26 @@ EMPLOYEE 360 DRAWER (480px, right)
                 {{-- Late + break history --}}
                 <div class="grid grid-cols-2 gap-3">
                     <div class="ui-surface p-3">
-                        <div class="mb-1.5 text-[9px] font-bold uppercase tracking-widest text-zinc-400">Late History</div>
+                        <div class="mb-1.5 text-[11px] font-bold uppercase tracking-widest text-zinc-400">Late History</div>
                         @forelse($drawer['late_history'] as $lh)
                             <div class="flex items-center justify-between py-0.5 text-[11px]"><span class="text-zinc-600 dark:text-zinc-300">{{ $lh['date'] }}</span><span class="font-bold text-amber-600">+{{ $lh['mins'] }}m</span></div>
-                        @empty<p class="text-[10px] text-emerald-600">No late arrivals 🎉</p>@endforelse
+                        @empty<p class="text-xs text-emerald-600">No late arrivals 🎉</p>@endforelse
                     </div>
                     <div class="ui-surface p-3">
-                        <div class="mb-1.5 text-[9px] font-bold uppercase tracking-widest text-zinc-400">Break History</div>
+                        <div class="mb-1.5 text-[11px] font-bold uppercase tracking-widest text-zinc-400">Break History</div>
                         @forelse($drawer['break_history'] as $bh)
                             <div class="flex items-center justify-between py-0.5 text-[11px]"><span class="text-zinc-600 dark:text-zinc-300">{{ $bh['date'] }}</span><span class="font-bold {{ $bh['mins'] > 60 ? 'text-amber-600' : 'text-zinc-800 dark:text-zinc-100' }}">{{ $bh['mins'] }}m</span></div>
-                        @empty<p class="text-[10px] text-zinc-400">No breaks recorded.</p>@endforelse
+                        @empty<p class="text-xs text-zinc-400">No breaks recorded.</p>@endforelse
                     </div>
                 </div>
 
                 {{-- Attendance history — Daily / Weekly toggle --}}
                 <div class="ui-surface p-4" x-data="{ tab: 'daily' }">
                     <div class="mb-2 flex items-center justify-between">
-                        <div class="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Attendance History</div>
+                        <div class="text-xs font-bold uppercase tracking-widest text-zinc-400">Attendance History</div>
                         <div class="flex items-center gap-0.5 rounded-lg bg-zinc-100 p-0.5 dark:bg-zinc-800">
-                            <button type="button" @click="tab = 'daily'" :class="tab === 'daily' ? 'bg-white text-zinc-800 shadow-sm dark:bg-zinc-700 dark:text-white' : 'text-zinc-400'" class="rounded-md px-2 py-0.5 text-[10px] font-bold transition">Daily</button>
-                            <button type="button" @click="tab = 'weekly'" :class="tab === 'weekly' ? 'bg-white text-zinc-800 shadow-sm dark:bg-zinc-700 dark:text-white' : 'text-zinc-400'" class="rounded-md px-2 py-0.5 text-[10px] font-bold transition">Weekly</button>
+                            <button type="button" @click="tab = 'daily'" :class="tab === 'daily' ? 'bg-white text-zinc-800 shadow-sm dark:bg-zinc-700 dark:text-white' : 'text-zinc-400'" class="rounded-md px-2 py-0.5 text-xs font-bold transition">Daily</button>
+                            <button type="button" @click="tab = 'weekly'" :class="tab === 'weekly' ? 'bg-white text-zinc-800 shadow-sm dark:bg-zinc-700 dark:text-white' : 'text-zinc-400'" class="rounded-md px-2 py-0.5 text-xs font-bold transition">Weekly</button>
                         </div>
                     </div>
 
@@ -774,11 +750,11 @@ EMPLOYEE 360 DRAWER (480px, right)
                             @php $hc = match($h['status']) { 'on_time' => 'text-emerald-600', 'late' => 'text-amber-600', default => 'text-zinc-400' }; @endphp
                             <div class="flex items-center justify-between rounded-lg px-2 py-1 text-[11px] odd:bg-orange-50/40">
                                 <span class="w-12 font-bold text-zinc-700 dark:text-zinc-200">{{ $h['date'] }}</span>
-                                <span class="font-mono tabular-nums text-zinc-600 dark:text-zinc-300">{{ $h['in'] ?? '—' }} → {{ $h['out'] ?? '—' }}</span>
+                                <span class="tabular-nums text-zinc-600 dark:text-zinc-300">{{ $h['in'] ?? '—' }} → {{ $h['out'] ?? '—' }}</span>
                                 <span class="font-black tabular-nums text-zinc-800 dark:text-zinc-100">{{ $h['hours'] ? number_format((float) $h['hours'], 1).'h' : '—' }}</span>
-                                <span class="text-[9px] font-bold uppercase {{ $hc }}">{{ str_replace('_', ' ', $h['status']) }}</span>
+                                <span class="text-[11px] font-bold uppercase {{ $hc }}">{{ str_replace('_', ' ', $h['status']) }}</span>
                             </div>
-                        @empty<p class="text-[10px] text-zinc-400">No records this month.</p>@endforelse
+                        @empty<p class="text-xs text-zinc-400">No records this month.</p>@endforelse
                     </div>
 
                     {{-- Weekly rollup (this month) --}}
@@ -788,9 +764,9 @@ EMPLOYEE 360 DRAWER (480px, right)
                                 <span class="font-bold text-zinc-700 dark:text-zinc-200">{{ $w['label'] }}</span>
                                 <span class="tabular-nums text-zinc-500 dark:text-zinc-400">{{ $w['present'] }}d present</span>
                                 <span class="font-black tabular-nums text-zinc-800 dark:text-zinc-100">{{ number_format((float) $w['hours'], 1) }}h</span>
-                                <span class="text-[9px] font-bold uppercase {{ $w['late'] > 0 ? 'text-amber-600' : 'text-emerald-600' }}">{{ $w['late'] }} late</span>
+                                <span class="text-[11px] font-bold uppercase {{ $w['late'] > 0 ? 'text-amber-600' : 'text-emerald-600' }}">{{ $w['late'] }} late</span>
                             </div>
-                        @empty<p class="text-[10px] text-zinc-400">No records this month.</p>@endforelse
+                        @empty<p class="text-xs text-zinc-400">No records this month.</p>@endforelse
                     </div>
                 </div>
             </div>
@@ -834,37 +810,37 @@ REVIEW REGULARISATION MODAL
                         <div class="flex items-center justify-between"><span class="text-zinc-500 dark:text-zinc-400">Employee</span><span class="font-bold text-zinc-900 dark:text-white">{{ $activeRequest->employee?->user?->name ?? '—' }}</span></div>
                         <div class="flex items-center justify-between"><span class="text-zinc-500 dark:text-zinc-400">Date</span><span class="font-bold text-zinc-900 dark:text-white">{{ \Carbon\Carbon::parse($activeRequest->work_date ?? $activeRequest->date)->toImmutable()->userDate() }}</span></div>
                         <div class="flex items-center justify-between"><span class="text-zinc-500 dark:text-zinc-400">Requested Time</span>
-                            <span class="font-mono font-bold text-orange-600">{{ $activeRequest->requestedWindowLabel() }}</span>
+                            <span class="tabular-nums font-bold text-orange-600">{{ $activeRequest->requestedWindowLabel() }}</span>
                         </div>
                         @if($activeRequest->attendance)
                             <div class="flex items-center justify-between"><span class="text-zinc-500 dark:text-zinc-400">Recorded Time</span>
-                                <span class="font-mono text-zinc-600 dark:text-zinc-300">{{ $activeRequest->attendance->check_in?->toImmutable()->userTime() ?? '—' }} → {{ $activeRequest->attendance->check_out?->toImmutable()->userTime() ?? '—' }}</span>
+                                <span class="tabular-nums text-zinc-600 dark:text-zinc-300">{{ $activeRequest->attendance->check_in?->toImmutable()->userTime() ?? '—' }} → {{ $activeRequest->attendance->check_out?->toImmutable()->userTime() ?? '—' }}</span>
                             </div>
                         @endif
                         <div class="border-t border-orange-100 pt-2">
-                            <p class="mb-1 text-[10px] uppercase tracking-wider text-zinc-400">Reason</p>
+                            <p class="mb-1 text-xs uppercase tracking-wider text-zinc-400">Reason</p>
                             <p class="text-xs italic text-zinc-700 dark:text-zinc-200">"{{ $activeRequest->reason }}"</p>
                         </div>
                         @if($activeRequest->attachment_path)
                             <div class="flex items-center justify-between border-t border-orange-100 pt-2">
-                                <span class="text-[10px] uppercase tracking-wider text-zinc-400">Attachment</span>
+                                <span class="text-xs uppercase tracking-wider text-zinc-400">Attachment</span>
                                 <a href="{{ \Illuminate\Support\Facades\Storage::url($activeRequest->attachment_path) }}" target="_blank" rel="noopener" class="inline-flex items-center gap-1 text-xs font-bold text-orange-600 hover:underline"><flux:icon.paper-clip class="size-3.5" /> View document</a>
                             </div>
                         @endif
                         {{-- Approval chain progress --}}
                         <div class="border-t border-orange-100 pt-2">
-                            <p class="mb-1.5 text-[10px] uppercase tracking-wider text-zinc-400">Approval Flow · currently at <b class="text-orange-600">{{ $activeRequest->stageLabel() }}</b></p>
+                            <p class="mb-1.5 text-xs uppercase tracking-wider text-zinc-400">Approval Flow · currently at <b class="text-orange-600">{{ $activeRequest->stageLabel() }}</b></p>
                             @php $stageNum = \App\Models\AttendanceRegularisation::STAGES[$activeRequest->stage ?? 'manager_review'] ?? 1; @endphp
                             <div class="flex items-center gap-1.5">
                                 @foreach(['Manager', 'HR', 'Admin'] as $i => $st)
-                                    <span class="flex-1 rounded-full px-2 py-1 text-center text-[10px] font-bold {{ $activeRequest->status === 'approved' || $stageNum > $i + 1 ? 'bg-emerald-100 text-emerald-700' : ($stageNum === $i + 1 && $activeRequest->status === 'pending' ? 'bg-orange-100 text-orange-700 ring-1 ring-orange-300' : 'bg-zinc-100 text-zinc-400 dark:bg-zinc-800') }}">{{ $st }}</span>
+                                    <span class="flex-1 rounded-full px-2 py-1 text-center text-xs font-bold {{ $activeRequest->status === 'approved' || $stageNum > $i + 1 ? 'bg-emerald-100 text-emerald-700' : ($stageNum === $i + 1 && $activeRequest->status === 'pending' ? 'bg-orange-100 text-orange-700 ring-1 ring-orange-300' : 'bg-zinc-100 text-zinc-400 dark:bg-zinc-800') }}">{{ $st }}</span>
                                     @if($i < 2)<flux:icon.chevron-right class="size-3 shrink-0 text-zinc-300" />@endif
                                 @endforeach
                             </div>
                             @if(! empty($activeRequest->approval_trail))
                                 <div class="mt-2 space-y-1">
                                     @foreach($activeRequest->approval_trail as $step)
-                                        <div class="flex items-center gap-1.5 text-[10px] text-zinc-500 dark:text-zinc-400">
+                                        <div class="flex items-center gap-1.5 text-xs text-zinc-500 dark:text-zinc-400">
                                             @php [$stepIcon, $stepTone] = match ($step['action'] ?? '') { 'approved' => ['check-circle', 'text-emerald-500'], 'edited', 'corrected' => ['pencil-square', 'text-sky-500'], default => ['x-circle', 'text-rose-500'] }; @endphp
                                             <flux:icon :icon="$stepIcon" class="size-3 {{ $stepTone }}" />
                                             <b>{{ $step['name'] ?? 'Reviewer' }}</b> {{ $step['action'] ?? '' }} at {{ str_replace('_', ' ', $step['stage'] ?? '') }} · {{ \Carbon\Carbon::parse($step['at'])->toImmutable()->userDateTime() }}
