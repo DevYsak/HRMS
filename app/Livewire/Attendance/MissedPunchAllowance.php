@@ -124,7 +124,11 @@ class MissedPunchAllowance extends Component
                 ->orWhere('employee_id', 'like', '%'.trim($this->search).'%')))
             ->get();
 
-        $flags = MissedPunchFlag::with('reviewer')->where('period', MissedPunchFlag::PERIOD_MONTH)->whereDate('period_start', $start->toDateString())
+        // Flags raised before tracking started are kept but not listed for review.
+        $startsOn = MissedPunchTracker::startsOn();
+        $trackedFlags = fn ($q) => $q->when($startsOn, fn ($w) => $w->whereDate('period_start', '>=', MissedPunchTracker::monthStart($startsOn)->toDateString()));
+
+        $flags = MissedPunchFlag::with('reviewer')->where('period', MissedPunchFlag::PERIOD_MONTH)->whereDate('period_start', $start->toDateString())->tap($trackedFlags)
             ->whereIn('employee_id', $employees->pluck('id'))->get()->keyBy('employee_id');
         $requests = AttendanceRegularisation::with('reviewer')->whereIn('employee_id', $employees->pluck('id'))
             ->whereBetween('work_date', [$start->toDateString(), $monthEnd->toDateString()])
@@ -153,7 +157,7 @@ class MissedPunchAllowance extends Component
             ->sortBy([['count', 'desc'], fn (array $a, array $b) => strcmp($a['employee']->user->name, $b['employee']->user->name)])
             ->values();
 
-        $history = MissedPunchFlag::with(['employee.user', 'employee.department', 'reviewer'])
+        $history = MissedPunchFlag::with(['employee.user', 'employee.department', 'reviewer'])->tap($trackedFlags)
             ->when($reach !== null, fn ($q) => $q->whereIn('employee_id', $reach))
             ->when($this->departmentId, fn ($q) => $q->whereHas('employee', fn ($e) => $e->where('department_id', $this->departmentId)))
             ->latest('period_start')->latest('id')->limit(50)->get();
@@ -165,6 +169,8 @@ class MissedPunchAllowance extends Component
             'warningAt' => MissedPunchTracker::warningAt(),
             'monthLabel' => MissedPunchTracker::monthLabel($start),
             'isThisMonth' => $start->isSameDay(MissedPunchTracker::monthStart(Carbon::today())),
+            // Set when tracking starts after the first day of the month shown.
+            'startsOn' => $startsOn !== null && $startsOn->gt($start) ? $startsOn : null,
             'kpis' => [
                 'missed' => $rows->where('count', '>', 0)->count(),
                 'warning' => $rows->where('status', MissedPunchTracker::STATUS_WARNING)->count(),

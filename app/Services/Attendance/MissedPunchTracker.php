@@ -33,6 +33,10 @@ use Illuminate\Support\Collection;
  * and starts again on the 1st. HR sets it on Attendance Settings (default
  * 5): going over it flags the employee for HR review. An early warning goes
  * out at its own number (default 3; 0 = none).
+ *
+ * Tracking starts on the day set on Attendance Settings (Conexus: 1 December
+ * 2026). Before it there are no missed punches: nothing is counted, shown,
+ * alerted, flagged or scored per punch. Empty = every day is tracked.
  */
 class MissedPunchTracker
 {
@@ -70,6 +74,9 @@ class MissedPunchTracker
     {
         $start = Carbon::parse($from->toDateString());
         $end = Carbon::parse($to->toDateString())->min(Carbon::today());
+        if (($startsOn = self::startsOn()) !== null) {
+            $start = $start->max($startsOn);
+        }
 
         if ($start->gt($end)) {
             return [];
@@ -107,6 +114,10 @@ class MissedPunchTracker
      */
     public function forDay(Employee $employee, Carbon $day, Collection $punches, ?Attendance $row, bool $regularised = false): array
     {
+        if (! self::tracks($day)) {
+            return [];
+        }
+
         $date = $day->toDateString();
         $resolved = $regularised || (bool) $row?->is_regularized;
         $autoClosed = (bool) $row?->isSystemAutoCheckout();
@@ -293,6 +304,22 @@ class MissedPunchTracker
         $start = self::monthStart($day ?? now());
 
         return self::countInMonth($this->between($employee, $start, $start->copy()->endOfMonth()), $start);
+    }
+
+    /** The first day missed punches are tracked (Attendance Settings), or null when every day is. */
+    public static function startsOn(): ?Carbon
+    {
+        $startsOn = ShiftResolver::settings()?->missed_punch_starts_on;
+
+        return $startsOn ? Carbon::parse($startsOn)->startOfDay() : null;
+    }
+
+    /** Whether missed punches are tracked on $day (on or after startsOn()). */
+    public static function tracks(CarbonInterface $day): bool
+    {
+        $startsOn = self::startsOn();
+
+        return $startsOn === null || $day->toDateString() >= $startsOn->toDateString();
     }
 
     /** Missed punches a calendar month allows (Attendance Settings, default 5). */

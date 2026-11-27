@@ -33,6 +33,17 @@
         </div>
     </div>
 
+    @if($startsOn)
+        <div class="flex items-start gap-3 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900 dark:border-sky-500/30 dark:bg-sky-500/10 dark:text-sky-100" data-missed-punch-not-started>
+            <flux:icon.information-circle class="mt-0.5 size-5 shrink-0 text-sky-600 dark:text-sky-300" />
+            <div>
+                <span class="font-semibold">Missed-punch tracking starts on {{ \Carbon\CarbonImmutable::parse($startsOn)->userDate() }}.</span>
+                Days before it are not counted, alerted, flagged or scored per punch.
+                <a href="{{ route('attendance.settings') }}" wire:navigate class="font-semibold text-sky-700 underline-offset-2 hover:underline dark:text-sky-300">Change the start date</a>
+            </div>
+        </div>
+    @endif
+
     {{-- KPIs --}}
     <div class="grid grid-cols-2 gap-3 lg:grid-cols-4">
         @foreach ([

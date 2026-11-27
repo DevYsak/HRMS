@@ -128,7 +128,14 @@ class AttendanceScoreEngine
             || ($metrics['needs_regularization'] ?? false)
             || ($metrics['missing_out'] ?? false)
             || (! $attendance->check_out);
-        if ($missed->isNotEmpty() && ! $attendance->is_regularized) {
+        if (! MissedPunchTracker::tracks($day)) {
+            // Before missed-punch tracking starts (Attendance Settings): the
+            // flat daily penalty the per-punch one replaced.
+            if ($missingPunch && ! $attendance->is_regularized && ! $attendance->is_auto_checkout) {
+                $apply('missing_punch', 'Missing punch', -$settings->missing_punch_penalty,
+                    'An IN/OUT punch is missing and has not been regularized.');
+            }
+        } elseif ($missed->isNotEmpty() && ! $attendance->is_regularized) {
             $apply('missing_punch', $missed->count() === 1 ? 'Missing punch' : 'Missed punches ('.$missed->count().')',
                 -$settings->missing_punch_penalty * $missed->count(),
                 $missed->pluck('label')->implode('; ').' — not regularized.');

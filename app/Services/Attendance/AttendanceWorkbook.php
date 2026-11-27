@@ -311,7 +311,8 @@ class AttendanceWorkbook
                 .Carbon::parse(ShiftHistory::TIMING_AUDIT_FROM)->format('d M Y').'; an earlier timing edit is not in the history, so those days use the timings recorded after it.'],
             ['Missing check-out', 'A day with a clock-in and no final clock-out after the shift end plus one hour. Nothing more is counted for it.'],
             ['Missed punch', 'Two INs in a row (a missed OUT), two OUTs in a row (a missed IN), or no final check-out once it is overdue. A regularised day still shows what was missed. '
-                .MissedPunchTracker::allowance().' are allowed in a calendar month (every day counts); one more flags the employee for HR review.'],
+                .MissedPunchTracker::allowance().' are allowed in a calendar month (every day counts); one more flags the employee for HR review.'
+                .(MissedPunchTracker::startsOn() ? ' Tracked from '.MissedPunchTracker::startsOn()->format('d M Y').'; earlier days show none.' : '')],
             ['Source', 'Biometric = device punches synced from the attendance engine; Web / manual = clocked in on the web or recorded by HR.'],
         ];
 

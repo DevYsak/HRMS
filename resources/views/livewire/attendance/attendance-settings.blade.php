@@ -81,6 +81,9 @@
                     <flux:input wire:model="policy.missed_punch_warning_at" type="number" min="0" max="50"
                         label="Early warning at"
                         description="Missed punches in a month that bring a warning to the employee. 0 = no early warning." />
+                    <flux:input wire:model="policy.missed_punch_starts_on" type="date" data-missed-punch-starts-on
+                        label="Missed-punch tracking starts on"
+                        description="Nothing before this day is counted, shown, alerted, flagged or scored per punch. Leave empty to track every day." />
                 </div>
                 <div class="space-y-3 pt-2">
                     <flux:switch wire:model="general.requires_location" label="Require Geolocation"

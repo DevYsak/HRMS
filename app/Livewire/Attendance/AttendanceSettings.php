@@ -70,6 +70,7 @@ class AttendanceSettings extends Component
         'policy.auto_checkout_buffer_minutes' => 'required|integer|min:0|max:240',
         'policy.missed_punch_monthly_allowance' => 'required|integer|min:1|max:50',
         'policy.missed_punch_warning_at' => 'required|integer|min:0|max:50',
+        'policy.missed_punch_starts_on' => 'nullable|date_format:Y-m-d',
     ];
 
     public function mount(): void
@@ -91,6 +92,7 @@ class AttendanceSettings extends Component
             'auto_checkout_buffer_minutes' => (int) ($this->settings->auto_checkout_buffer_minutes ?? 30),
             'missed_punch_monthly_allowance' => (int) ($this->settings->missed_punch_monthly_allowance ?? MissedPunchTracker::DEFAULT_ALLOWANCE),
             'missed_punch_warning_at' => (int) ($this->settings->missed_punch_warning_at ?? MissedPunchTracker::DEFAULT_WARNING_AT),
+            'missed_punch_starts_on' => $this->settings->missed_punch_starts_on?->toDateString() ?? '',
         ];
 
         $this->weeklyOffDays = AttendanceSetting::weeklyOffDays();
@@ -132,6 +134,7 @@ class AttendanceSettings extends Component
             'auto_checkout_buffer_minutes' => $this->policy['auto_checkout_buffer_minutes'],
             'missed_punch_monthly_allowance' => (int) $this->policy['missed_punch_monthly_allowance'],
             'missed_punch_warning_at' => (int) $this->policy['missed_punch_warning_at'],
+            'missed_punch_starts_on' => ($this->policy['missed_punch_starts_on'] ?? '') !== '' ? $this->policy['missed_punch_starts_on'] : null,
         ])->save();
 
         \Flux::toast('Attendance settings updated.');
